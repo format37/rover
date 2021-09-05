@@ -43,7 +43,7 @@ kit = ServoKit(channels=16, address=0x42)
 pipeline = rs.pipeline()
 config = rs.config()
 #config.enable_stream(rs.stream.depth,width=1280,height=720)
-config.enable_stream(rs.stream.depth,width=16,height=16)
+config.enable_stream(rs.stream.depth,width=320,height=240)
 pipeline.start(config)
 depth_images = None
 servo_states = []
