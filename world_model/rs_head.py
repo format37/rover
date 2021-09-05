@@ -25,12 +25,13 @@ while True:
 	depth = frames.get_depth_frame()
 	if not depth:
 		continue
-	new_image = np.array([np.asanyarray(depth.get_data( ))])
+	time_diff = time.time() - start_time
+	new_image = np.array([np.asanyarray(depth.get_data( )), time_diff])
 	if images is None:
 		images = new_image
 	else:
 		images = np.append(images, new_image, axis=0)
-	time_diff = time.time() - start_time
+	
 	if (time_diff > 3):
 		break
 	kit.servo[0].angle = head_rotation_map[int(time_diff*100)]
@@ -44,6 +45,8 @@ for i in range(0,(170-95)):
 	time.sleep(0.03)
 
 pipeline.stop()
+print('saving..')
 np.save('session.npy', images)
-time.sleep(3)
+print('saved')
+time.sleep(1)
 print('exit', 170-i)
