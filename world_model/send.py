@@ -2,7 +2,7 @@ import os
 import paramiko
 import datetime
 
-destination_path = '/home/alex/rig1/projects/pc/rover/world_model/data/session.npy'
+destination_path = '/home/alex/rig1/projects/pc/rover/world_model/data/'
 
 def send_file(host, username, password, local_file, remote_file):
     ssh = paramiko.SSHClient()
@@ -13,12 +13,14 @@ def send_file(host, username, password, local_file, remote_file):
     sftp.close()
     ssh.close()
 
-print(datetime.now(), 'Sending..')
-send_file(
-    host='192.168.1.23',
-    username=os.environ.get('SFTP_USER',''),
-    password=os.environ.get('SFTP_PASSWORD',''),
-    local_file='session.npy',
-    remote_file=destination_path
-    )
+for filename in ['servo.npy', 'depth.npy']:
+    print(datetime.now(), 'Sending', filename, datetime.now())
+    send_file(
+        host='192.168.1.23',
+        username=os.environ.get('SFTP_USER',''),
+        password=os.environ.get('SFTP_PASSWORD',''),
+        local_file=filename,
+        remote_file=destination_path+str(datetime.now())+'_'+filename
+        )
+
 print(datetime.now(), 'Session file sent to:', destination_path)
