@@ -1,6 +1,7 @@
 import pyrealsense2 as rs
 import numpy as np
 import time
+from adafruit_servokit import ServoKit
 
 def rotation_map(start_position, end_position, steps):
 	multiplier = (end_position - start_position) / steps
@@ -9,6 +10,7 @@ def rotation_map(start_position, end_position, steps):
 		rot_map[i] = int(start_position + i * multiplier)
 	return rot_map
 
+kit = ServoKit(channels=16, address=0x42)
 pipeline = rs.pipeline()
 config = rs.config()
 config.enable_stream(rs.stream.depth,width=1280,height=720)
@@ -31,8 +33,12 @@ while True:
 	time_diff = time.time() - start_time
 	if (time_diff > 3):
 		break
-	print(head_rotation_map[int(time_diff*100)])	
+	kit.servo[0].angle = head_rotation_map[int(time_diff*100)]
 	i += 1
 
 print('images collected:', i, np.array(images).shape)
+for i in range(0,(180-95)):
+	kit.servo[0].angle = 180-i
+	time.sleep(0.1)
 pipeline.stop()
+print('exit')
