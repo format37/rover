@@ -48,13 +48,16 @@ pipeline.start(config)
 depth_images = None
 servo_states = []
 
+# look right
+servo_states, depth_images = action(servo_states, depth_images, 1, 90, 0)
 for i in range(10):
 	# look left
-	servo_states, depth_images = action(servo_states, depth_images, 1, 90, 180)
+	servo_states, depth_images = action(servo_states, depth_images, 1, 0, 180)
 	# look right
 	servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
-	# look front
-	servo_states, depth_images = action(servo_states, depth_images, 1, 0, 90)
+# look front
+servo_states, depth_images = action(servo_states, depth_images, 2, 0, 90)
+	
 
 print('images collected:', np.array(depth_images).shape)
 """
