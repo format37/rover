@@ -42,7 +42,8 @@ def action(servo_states, depth_images, lenght, servo_start, servo_end):
 kit = ServoKit(channels=16, address=0x42)
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.depth,width=1280,height=720)
+#config.enable_stream(rs.stream.depth,width=1280,height=720)
+config.enable_stream(rs.stream.depth,width=16,height=16)
 pipeline.start(config)
 depth_images = None
 servo_states = []
