@@ -1,6 +1,6 @@
 import os
 import paramiko
-import datetime
+from datetime import datetime
 
 destination_path = '/home/alex/rig1/projects/pc/rover/world_model/data/'
 
