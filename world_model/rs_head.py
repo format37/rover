@@ -17,7 +17,7 @@ while True:
 		continue
 	new_image = np.asanyarray(depth.get_data( ))
 	if images is None:
-		images = new_image
+		images = [new_image]
 	else:
 		images = np.append(images, new_image, axis=0)
 	i += 1
