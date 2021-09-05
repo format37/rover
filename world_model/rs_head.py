@@ -46,11 +46,11 @@ depth_images = None
 servo_states = []
 
 # look left
-servo_states, depth_images = action(servo_states, depth_images, 1, 90, 180)
+servo_states, depth_images = action(servo_states, depth_images, 0.5, 90, 180)
 # look right
-servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
+servo_states, depth_images = action(servo_states, depth_images, 1, 180, 0)
 # look front
-servo_states, depth_images = action(servo_states, depth_images, 1, 0, 90)
+servo_states, depth_images = action(servo_states, depth_images, 0.5, 0, 90)
 
 print('images collected:', np.array(depth_images).shape)
 """
