@@ -14,13 +14,13 @@ def send_file(host, username, password, local_file, remote_file):
     ssh.close()
 
 for filename in ['servo.npy', 'depth.npy']:
-    print(datetime.now(), 'Sending', filename, datetime.now())
+    print(datetime.now(), 'Sending', filename)
     send_file(
         host='192.168.1.23',
         username=os.environ.get('SFTP_USER',''),
         password=os.environ.get('SFTP_PASSWORD',''),
         local_file=filename,
-        remote_file=destination_path+str(datetime.now())+'_'+filename
+        remote_file=destination_path+filename
         )
 
 print(datetime.now(), 'files sent')
