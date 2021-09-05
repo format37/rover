@@ -23,4 +23,4 @@ for filename in ['servo.npy', 'depth.npy']:
         remote_file=destination_path+str(datetime.now())+'_'+filename
         )
 
-print(datetime.now(), 'Session file sent to:', destination_path)
+print(datetime.now(), 'files sent')

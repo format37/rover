@@ -32,12 +32,11 @@ while True:
 		depth_images = new_depth_image
 	else:
 		depth_images = np.append(depth_images, new_depth_image, axis=0)
-	
-	if (time_diff > 3):
-		break
 	current_servo_state = head_rotation_map[int(time_diff*100)]
 	servo_states.append(current_servo_state)
 	kit.servo[0].angle = current_servo_state	
+	if (time_diff > 3):
+		break
 	i += 1
 
 print('images collected:', np.array(depth_images).shape)
