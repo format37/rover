@@ -28,10 +28,11 @@ while True:
 		images = new_image
 	else:
 		images = np.append(images, new_image, axis=0)
-	print(head_rotation_map[i])	
-	if (time.time() - start_time > 3):
+	time_diff = time.time() - start_time
+	print(head_rotation_map[int(time_diff*100)])
+	if (time_diff > 3):
 		break
 	i += 1
-	
+
 print('images collected:', i, np.array(images).shape)
 pipeline.stop()
