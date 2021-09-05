@@ -26,7 +26,7 @@ while True:
 	if not depth:
 		continue
 	time_diff = time.time() - start_time
-	new_image = np.array([np.asanyarray(depth.get_data( )), time_diff])
+	new_image = np.array([np.asanyarray(depth.get_data( )), np.array([time_diff])])
 	if images is None:
 		images = new_image
 	else:
