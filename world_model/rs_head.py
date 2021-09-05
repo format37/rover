@@ -15,9 +15,11 @@ while True:
 	depth = frames.get_depth_frame()
 	if not depth:
 		continue
+	new_image = np.asanyarray(depth.get_data( ))
 	if images is None:
-		images = np.array(np.asanyarray(depth.get_data( )))
-	#else:
+		images = new_image
+	else:
+		images = np.append(images, new_image, axis=0)
 	i += 1
 	if (time.time() - start_time > 3):
 		break
