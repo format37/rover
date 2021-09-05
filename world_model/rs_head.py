@@ -15,8 +15,9 @@ while True:
 	depth = frames.get_depth_frame()
 	if not depth:
 		continue
-	images.append(np.asanyarray(depth.get_data( )))
+	#images.append(np.asanyarray(depth.get_data( )))
 	i += 1
 	if (time.time() - start_time > 3):
 		break
-print('images collected:', i, np.array(images).shape)
+#print('images collected:', i, np.array(images).shape)
+pipeline.stop()

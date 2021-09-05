@@ -77,5 +77,3 @@ while True:
 		set(track = 0, speed = round(right/lr,1), direction = 0)
 		set(track = 1, speed = round(left/lr,1), direction = 1)
 	print(lr/100,earth/100)
-
-pipeline.stop()
