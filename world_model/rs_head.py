@@ -16,38 +16,39 @@ config = rs.config()
 config.enable_stream(rs.stream.depth,width=1280,height=720)
 pipeline.start(config)
 
-head_rotation_map = rotation_map(start_position=95, end_position=170, steps=300)
+head_rotation_map = rotation_map(start_position=90, end_position=180, steps=300)
 start_time = time.time()
 i = 0
-images = None
+depth_images = None
+servo_states = []
 while True:
 	frames = pipeline.wait_for_frames()
 	depth = frames.get_depth_frame()
 	if not depth:
 		continue
 	time_diff = time.time() - start_time
-	#new_image = np.array([np.asanyarray(depth.get_data( )), np.array([time_diff])])
-	new_image = np.array([np.asanyarray(depth.get_data( ))])
-	if images is None:
-		images = new_image
+	new_depth_image = np.array([np.asanyarray(depth.get_data( ))])
+	if depth_images is None:
+		depth_images = new_depth_image
 	else:
-		images = np.append(images, new_image, axis=0)
+		depth_images = np.append(depth_images, new_depth_image, axis=0)
 	
 	if (time_diff > 3):
 		break
-	kit.servo[0].angle = head_rotation_map[int(time_diff*100)]
-	print(head_rotation_map[int(time_diff*100)])
+	current_servo_state = head_rotation_map[int(time_diff*100)]
+	servo_states.append(current_servo_state)
+	kit.servo[0].angle = current_servo_state	
 	i += 1
 
-print('images collected:', np.array(images).shape)
+print('images collected:', np.array(depth_images).shape)
 time.sleep(3)
-for i in range(0,(170-95)):
-	kit.servo[0].angle = 170-i
+for i in range(0,(180-90)):
+	kit.servo[0].angle = 180-i
 	time.sleep(0.03)
 
 pipeline.stop()
+
 print('saving..')
-np.save('session.npy', images)
+np.save('servo.npy', np.array(servo_states))
+np.save('depth.npy', depth_images)
 print('saved')
-time.sleep(1)
-print('exit', 170-i)
