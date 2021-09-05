@@ -29,9 +29,9 @@ while True:
 	else:
 		images = np.append(images, new_image, axis=0)
 	time_diff = time.time() - start_time
-	print(head_rotation_map[int(time_diff*100)])
 	if (time_diff > 3):
 		break
+	print(head_rotation_map[int(time_diff*100)])	
 	i += 1
 
 print('images collected:', i, np.array(images).shape)
