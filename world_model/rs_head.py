@@ -37,11 +37,12 @@ while True:
 	i += 1
 
 print('images collected:', np.array(images).shape)
+time.sleep(3)
 for i in range(0,(180-95)):
 	kit.servo[0].angle = 180-i
 	time.sleep(0.01)
 
 pipeline.stop()
 np.save('session.npy', images)
-time.sleep(1)
+time.sleep(3)
 print('exit', 180-i)
