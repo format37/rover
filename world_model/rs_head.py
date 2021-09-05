@@ -42,8 +42,9 @@ def action(servo_states, depth_images, lenght, servo_start, servo_end):
 kit = ServoKit(channels=16, address=0x42)
 pipeline = rs.pipeline()
 config = rs.config()
-#config.enable_stream(rs.stream.depth,width=1280,height=720)
-config.enable_stream(rs.stream.depth,width=424,height=240)
+#config.enable_stream(rs.stream.depth,width=1280,height=720) # FPS = 30
+#config.enable_stream(rs.stream.depth,width=640,height=480) # FPS = 60
+config.enable_stream(rs.stream.depth,width=424,height=240) # FPS = 90
 pipeline.start(config)
 depth_images = None
 servo_states = []
@@ -57,7 +58,7 @@ for i in range(10):
 	servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
 # look front
 servo_states, depth_images = action(servo_states, depth_images, 2, 0, 90)
-	
+
 
 print('images collected:', np.array(depth_images).shape)
 """
