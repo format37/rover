@@ -7,7 +7,6 @@ def rotation_map(start_position, end_position, steps):
 	multiplier = (end_position - start_position) / steps
 	rot_map = dict()
 	for i in range(0, steps):
-		#rot_map[i] = int(start_position + i * multiplier)
 		rot_map[i] = start_position + i * multiplier
 	return rot_map
 
@@ -48,15 +47,17 @@ pipeline.start(config)
 depth_images = None
 servo_states = []
 
-# look left
-servo_states, depth_images = action(servo_states, depth_images, 1, 90, 180)
-# look right
-servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
-# look front
-servo_states, depth_images = action(servo_states, depth_images, 1, 0, 90)
+for i in range(10):
+	# look left
+	servo_states, depth_images = action(servo_states, depth_images, 1, 90, 180)
+	# look right
+	servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
+	# look front
+	servo_states, depth_images = action(servo_states, depth_images, 1, 0, 90)
 
 print('images collected:', np.array(depth_images).shape)
 """
+# look front
 for i in range(0,(180-90)):
 	kit.servo[0].angle = 180-i
 	time.sleep(0.03)
