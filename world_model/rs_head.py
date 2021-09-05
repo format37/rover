@@ -13,7 +13,9 @@ def rotation_map(start_position, end_position, steps):
 def action(servo_states, depth_images, lenght, servo_start, servo_end):
 	head_rotation_map = rotation_map(
 		start_position=servo_start, 
-		end_position=servo_end, steps=lenght*100)
+		end_position=servo_end, 
+		steps=int(lenght*100)
+		)
 	start_time = time.time()
 	i = 0	
 	while True:
