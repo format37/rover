@@ -16,7 +16,7 @@ config = rs.config()
 config.enable_stream(rs.stream.depth,width=1280,height=720)
 pipeline.start(config)
 
-head_rotation_map = rotation_map(start_position=95, end_position=180, steps=300)
+head_rotation_map = rotation_map(start_position=95, end_position=170, steps=300)
 start_time = time.time()
 i = 0
 images = None
@@ -34,15 +34,16 @@ while True:
 	if (time_diff > 3):
 		break
 	kit.servo[0].angle = head_rotation_map[int(time_diff*100)]
+	print(head_rotation_map[int(time_diff*100)])
 	i += 1
 
 print('images collected:', np.array(images).shape)
 time.sleep(3)
-for i in range(0,(180-95)):
-	kit.servo[0].angle = 180-i
+for i in range(0,(170-95)):
+	kit.servo[0].angle = 170-i
 	time.sleep(0.03)
 
 pipeline.stop()
 np.save('session.npy', images)
 time.sleep(3)
-print('exit', 180-i)
+print('exit', 170-i)
