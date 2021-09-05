@@ -5,9 +5,7 @@ from adafruit_servokit import ServoKit
 kit = ServoKit(channels=16, address=0x42)
 
 print('start')
-
-delay = 0.04
-# kit = ServoKit(channels=16, address=0x42)
+delay = 0.1
 for i in range(95,180):
 	kit.servo[0].angle = i
 	time.sleep(delay)
