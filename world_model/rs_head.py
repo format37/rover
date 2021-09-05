@@ -46,15 +46,18 @@ depth_images = None
 servo_states = []
 
 # look left
-servo_states, depth_images = action(servo_states, depth_images, 2, 90, 180)
-servo_states, depth_images = action(servo_states, depth_images, 4, 180, 0)
-servo_states, depth_images = action(servo_states, depth_images, 2, 0, 90)
+servo_states, depth_images = action(servo_states, depth_images, 1, 90, 180)
+# look right
+servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
+# look front
+servo_states, depth_images = action(servo_states, depth_images, 1, 0, 90)
 
 print('images collected:', np.array(depth_images).shape)
+"""
 for i in range(0,(180-90)):
 	kit.servo[0].angle = 180-i
 	time.sleep(0.03)
-
+"""
 pipeline.stop()
 
 print('saving..')
