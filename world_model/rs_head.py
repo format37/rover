@@ -7,7 +7,8 @@ def rotation_map(start_position, end_position, steps):
 	multiplier = (end_position - start_position) / steps
 	rot_map = dict()
 	for i in range(0, steps):
-		rot_map[i] = int(start_position + i * multiplier)
+		#rot_map[i] = int(start_position + i * multiplier)
+		rot_map[i] = start_position + i * multiplier
 	return rot_map
 
 def action(servo_states, depth_images, lenght, servo_start, servo_end):
