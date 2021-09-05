@@ -16,7 +16,7 @@ while True:
 	depth = frames.get_depth_frame()
 	if not depth:
 		continue
-    depth_image = np.asanyarray(depth.get_data( )) # * depth_scale
+	depth_image = np.asanyarray(depth.get_data( )) # * depth_scale
 	i += 1
 	if (time.time() - start_time > 3):
 		break
