@@ -8,7 +8,7 @@ print('start')
 
 delay = 0.02
 # kit = ServoKit(channels=16, address=0x42)
-for i in range(85,180):
+for i in range(95,180):
 	kit.servo[0].angle = i
 	time.sleep(delay)
 
@@ -16,7 +16,7 @@ for i in range(0,180):
         kit.servo[0].angle = 180-i
         time.sleep(delay)
 
-for i in range(0,85):
+for i in range(0,95):
         kit.servo[0].angle = i
         time.sleep(delay)
 
