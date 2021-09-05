@@ -12,8 +12,8 @@ def send_file(host, username, password, local_file, remote_file):
 
 send_file(
     host='192.168.1.23',
-    username='alex',
-    passord=os.environ('SFTP_PASSWORD',''),
+    username=os.environ.get('SFTP_USER',''),
+    passord=os.environ.get('SFTP_PASSWORD',''),
     local_file='session.npy',
     remote_file='session.npy'
     )
