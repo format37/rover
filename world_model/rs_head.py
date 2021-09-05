@@ -9,15 +9,17 @@ pipeline.start(config)
 
 start_time = time.time()
 i = 0
-images = []
+images = None
 while True:
 	frames = pipeline.wait_for_frames()
 	depth = frames.get_depth_frame()
 	if not depth:
 		continue
-	#images.append(np.asanyarray(depth.get_data( )))
+	if images is None:
+		images = np.array(np.asanyarray(depth.get_data( )))
+	#else:
 	i += 1
 	if (time.time() - start_time > 3):
 		break
-#print('images collected:', i, np.array(images).shape)
+print('images collected:', i, np.array(images).shape)
 pipeline.stop()
