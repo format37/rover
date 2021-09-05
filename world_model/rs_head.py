@@ -3,7 +3,7 @@ import numpy as np
 import time
 from adafruit_servokit import ServoKit
 
-def rotation_map(start_position, end_position, steps):
+def rotation_map(start_position, end_position, steps):	
 	multiplier = (end_position - start_position) / steps
 	rot_map = dict()
 	for i in range(0, steps):
@@ -11,7 +11,9 @@ def rotation_map(start_position, end_position, steps):
 	return rot_map
 
 def action(servo_states, depth_images, lenght, servo_start, servo_end):
-	head_rotation_map = rotation_map(start_position=90, end_position=180, steps=300)
+	head_rotation_map = rotation_map(
+		start_position=servo_start, 
+		end_position=servo_end, steps=lenght*100)
 	start_time = time.time()
 	i = 0	
 	while True:
@@ -25,11 +27,11 @@ def action(servo_states, depth_images, lenght, servo_start, servo_end):
 			depth_images = new_depth_image
 		else:
 			depth_images = np.append(depth_images, new_depth_image, axis=0)
-		if (time_diff < 3):
+		if (time_diff < lenght):
 			current_servo_state = head_rotation_map[int(time_diff*100)]
 			kit.servo[0].angle = current_servo_state	
 		servo_states.append(current_servo_state)
-		if (time_diff > 3):
+		if (time_diff > lenght):
 			break	
 		i += 1
 	return servo_states, depth_images
@@ -45,6 +47,8 @@ servo_states = []
 
 # look left
 servo_states, depth_images = action(servo_states, depth_images, 3, 90, 180)
+servo_states, depth_images = action(servo_states, depth_images, 6, 180, 0)
+servo_states, depth_images = action(servo_states, depth_images, 3, 0, 90)
 
 print('images collected:', np.array(depth_images).shape)
 for i in range(0,(180-90)):
