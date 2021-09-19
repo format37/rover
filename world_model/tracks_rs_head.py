@@ -33,12 +33,12 @@ async def move_head():
 	while cam_ready == False or tracks_ready == False:		
 		await asyncio.sleep(delay)
 	print('servo start')
-	for servo_angle in range(100,150):
+	for servo_angle in range(100,180):
 		kit.servo[0].angle = servo_angle
 		await asyncio.sleep(delay)
 
-	for i in range(0,150):
-		servo_angle = 150 - i
+	for i in range(0,180):
+		servo_angle = 180 - i
 		kit.servo[0].angle = servo_angle
 		await asyncio.sleep(delay)
 
@@ -57,7 +57,7 @@ async def move_tracks():
 	print('Tracks init')
 	last_angle = servo_angle
 
-	default_speed = 0.05
+	default_speed = 0.03
 	delay = 0.1
 
 	def set(track,speed,direction):
