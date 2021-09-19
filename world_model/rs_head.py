@@ -93,12 +93,13 @@ async def camera_capture():
 	print('camera saved')
 
 
-def main():
+async def main():
 
 	loop = asyncio.get_event_loop()
 	loop.run_until_complete(asyncio.gather(move_head(), camera_capture()))
 	loop.close()
     
 
-if __name__ == '__main__':
-	main()
+#if __name__ == '__main__':
+#	main()
+asyncio.run(main())
