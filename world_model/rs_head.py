@@ -70,7 +70,7 @@ async def camera_capture():
 		
 		# save image
 		frames = pipeline.wait_for_frames()
-		aligned_frames = self.align.process(frames) # new
+		aligned_frames = align.process(frames) # new
 		#depth = frames.get_depth_frame()
 		depth = aligned_frames.get_depth_frame()
 		if not depth:
