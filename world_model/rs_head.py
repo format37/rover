@@ -71,7 +71,6 @@ async def camera_capture():
 		print('cam: servo_activity', servo_activity)
 	print('camera start')
 	while True:
-		break
 		if not servo_activity:
 			break
 		frames = pipeline.wait_for_frames()
@@ -84,6 +83,7 @@ async def camera_capture():
 			depth_images = new_depth_image
 		else:
 			depth_images = np.append(depth_images, new_depth_image, axis=0)
+		break
 
 	pipeline.stop()
 
