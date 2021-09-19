@@ -17,11 +17,12 @@ async def move_head():
 
 	delay = 0.1	
 	kit = ServoKit(channels=16, address=0x42)
-	print('servo ready')
+	print('servo ready')	
 	servo_activity = True
-	while not cam_ready== False:
-		await asyncio.sleep(delay)
-	#print('servo start')
+	while cam_ready == False:		
+		await asyncio.sleep(1)
+		print('servo: cam_ready', cam_ready)
+	print('servo start')
 	for servo_angle in range(100,180):
 			kit.servo[0].angle = servo_angle
 			await asyncio.sleep(delay)
@@ -51,11 +52,12 @@ async def camera_capture():
 	servo_states = []
 	start_time = time.time()
 	i = 0
-	delay = 0.1
-	cam_ready = True
-	print('camera ready')
+	delay = 1
+	cam_ready = True	
+	print('camera ready')	
 	while servo_activity == False:
 		await asyncio.sleep(delay)
+		print('cam: servo_activity', servo_activity)
 	print('camera start')
 	while True:
 		if not servo_activity:
