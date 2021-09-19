@@ -71,7 +71,7 @@ async def camera_capture():
 		print('cam: servo_activity', servo_activity)
 	print('camera start')
 	while True:
-		if not servo_activity:
+		if servo_activity == False:
 			break
 		frames = pipeline.wait_for_frames()
 		depth = frames.get_depth_frame()
@@ -84,6 +84,8 @@ async def camera_capture():
 		else:
 			depth_images = np.append(depth_images, new_depth_image, axis=0)
 		#break
+		await asyncio.sleep(delay)
+
 
 	pipeline.stop()
 
@@ -93,13 +95,12 @@ async def camera_capture():
 	print('camera saved')
 
 
-async def main():
+def main():
 
 	loop = asyncio.get_event_loop()
 	loop.run_until_complete(asyncio.gather(move_head(), camera_capture()))
 	loop.close()
     
 
-#if __name__ == '__main__':
-#	main()
-asyncio.run(main())
+if __name__ == '__main__':
+	main()
