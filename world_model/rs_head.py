@@ -45,7 +45,8 @@ async def camera_capture():
 	config = rs.config()
 	#config.enable_stream(rs.stream.depth,width=1280,height=720) # FPS = 30
 	#config.enable_stream(rs.stream.depth,width=640,height=480) # FPS = 60
-	config.enable_stream(rs.stream.depth,width=424,height=240) # FPS = 90
+	config.enable_stream(rs.stream.depth,width=424,height=240, rs.format.z16, 30) # FPS = 90
+	rs.align(rs.stream.color) # new
 	pipeline.start(config)
 	depth_images = None
 	
@@ -69,7 +70,9 @@ async def camera_capture():
 		
 		# save image
 		frames = pipeline.wait_for_frames()
-		depth = frames.get_depth_frame()
+		aligned_frames = self.align.process(frames) # new
+		#depth = frames.get_depth_frame()
+		depth = aligned_frames.get_depth_frame()
 		if not depth:
 			continue
 		time_diff = time.time() - start_time
