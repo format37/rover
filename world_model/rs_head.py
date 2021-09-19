@@ -15,7 +15,7 @@ import asyncio
 
 async def move_head():
 
-	delay = 0.1	
+	delay = 0.1
 	kit = ServoKit(channels=16, address=0x42)
 	print('servo ready')	
 	servo_activity = True
@@ -41,6 +41,9 @@ async def move_head():
 
 async def camera_capture():
 	
+	global cam_ready
+	cam_ready = False
+
 	pipeline = rs.pipeline()
 	config = rs.config()
 	#config.enable_stream(rs.stream.depth,width=1280,height=720) # FPS = 30
@@ -83,11 +86,10 @@ async def camera_capture():
 
 def main():
 	
-	global cam_ready
+	
 	global servo_activity
 	global servo_angle
-
-	cam_ready = False
+	
 	servo_activity = False
 	servo_angle = 100
 
