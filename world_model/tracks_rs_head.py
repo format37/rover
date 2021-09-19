@@ -54,6 +54,8 @@ async def move_tracks():
 
 	global tracks_ready
 
+	default_speed = 0.1
+
 	def set(track,speed,direction):
 		if speed>0:
 			frequency = speed*2300
@@ -77,8 +79,8 @@ async def move_tracks():
 	tracks_ready = True
 
 	print('Tracks start')
-	set(track = 0, speed = 1, direction = 0)
-	set(track = 1, speed = 1, direction = 0)
+	set(track = 0, speed = default_speed, direction = 0)
+	set(track = 1, speed = default_speed, direction = -1)
 	await asyncio.sleep(1)
 	set(track = 0, speed = 0, direction = 0)
 	set(track = 1, speed = 0, direction = 0)
