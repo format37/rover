@@ -8,14 +8,6 @@ cam_ready = False
 servo_activity = False
 servo_angle = 100
 
-"""def rotation_map(start_position, end_position, steps):	
-	multiplier = (end_position - start_position) / steps
-	rot_map = dict()
-	for i in range(0, steps):
-		rot_map[i] = start_position + i * multiplier
-	return rot_map"""
-
-
 async def move_head():
 
 	global servo_activity
@@ -27,21 +19,21 @@ async def move_head():
 	servo_activity = True
 	while cam_ready == False:		
 		await asyncio.sleep(delay)
-		print('servo: cam_ready', cam_ready)
+		#print('servo: cam_ready', cam_ready)
 	print('servo start')
 	for servo_angle in range(100,180):
 			kit.servo[0].angle = servo_angle
-			print('servo_angle', servo_angle)
+			#print('servo_angle', servo_angle)
 			await asyncio.sleep(delay)
 
 	for servo_angle in range(0,180):
 			kit.servo[0].angle = 180-servo_angle
-			print('servo_angle', 180-servo_angle)
+			#print('servo_angle', 180-servo_angle)
 			await asyncio.sleep(delay)
 
 	for servo_angle in range(0,100):
 			kit.servo[0].angle = servo_angle
-			print('servo_angle', servo_angle)
+			#print('servo_angle', servo_angle)
 			await asyncio.sleep(delay)
 
 	servo_activity = False
@@ -63,12 +55,12 @@ async def camera_capture():
 	servo_states = []
 	start_time = time.time()
 	i = 0
-	delay = 1
+	delay = 0.1
 	cam_ready = True	
 	print('camera ready')	
 	while servo_activity == False:
 		await asyncio.sleep(delay)
-		print('cam: servo_activity', servo_activity)
+		#print('cam: servo_activity', servo_activity)
 	print('camera start')
 	while True:
 		if servo_activity == False:
@@ -83,7 +75,6 @@ async def camera_capture():
 			depth_images = new_depth_image
 		else:
 			depth_images = np.append(depth_images, new_depth_image, axis=0)
-		#break
 		await asyncio.sleep(delay)
 
 
