@@ -4,6 +4,9 @@ import time
 from adafruit_servokit import ServoKit
 import asyncio
 
+cam_ready = False
+servo_activity = False
+servo_angle = 100
 
 """def rotation_map(start_position, end_position, steps):	
 	multiplier = (end_position - start_position) / steps
@@ -16,10 +19,7 @@ import asyncio
 async def move_head():
 
 	global servo_activity
-	global servo_angle
-	
-	servo_activity = False
-	servo_angle = 100
+	global servo_angle	
 
 	delay = 0.1
 	kit = ServoKit(channels=16, address=0x42)
@@ -48,7 +48,6 @@ async def move_head():
 async def camera_capture():
 	
 	global cam_ready
-	cam_ready = False
 
 	pipeline = rs.pipeline()
 	config = rs.config()
