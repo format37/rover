@@ -83,7 +83,7 @@ async def camera_capture():
 			depth_images = new_depth_image
 		else:
 			depth_images = np.append(depth_images, new_depth_image, axis=0)
-		break
+		#break
 
 	pipeline.stop()
 
