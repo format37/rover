@@ -77,7 +77,7 @@ async def camera_capture():
 	print('saved')
 
 
-async def main():
+def main():
 	
 	global cam_ready
 	global servo_activity
@@ -88,14 +88,11 @@ async def main():
 	servo_angle = 100
 
 	loop = asyncio.get_event_loop()
-    loop.run_until_complete(move_head(foo(), camera_capture()))
-    loop.close()
+	loop.run_until_complete(move_head(foo(), camera_capture()))
+	loop.close()
 
 	#await asyncio.gather(move_head(), camera_capture())
-
-
-def main():
     
 
 if __name__ == '__main__':
-    main()
+	main()
