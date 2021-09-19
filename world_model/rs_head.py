@@ -78,8 +78,8 @@ async def main():
 	global cam_ready = False
 	global servo_angle = 100
 	
-    await asyncio.gather(move_head(), camera_capture())
+	await asyncio.gather(move_head(), camera_capture())
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+	asyncio.run(main())
