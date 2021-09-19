@@ -1,7 +1,9 @@
 import pyrealsense2 as rs
 import numpy as np
-import time
+#import time
 from adafruit_servokit import ServoKit
+import asyncio
+
 
 def rotation_map(start_position, end_position, steps):	
 	multiplier = (end_position - start_position) / steps
@@ -10,14 +12,46 @@ def rotation_map(start_position, end_position, steps):
 		rot_map[i] = start_position + i * multiplier
 	return rot_map
 
-def action(servo_states, depth_images, lenght, servo_start, servo_end):
-	head_rotation_map = rotation_map(
+
+async def move_head():
+	kit = ServoKit(channels=16, address=0x42)
+	servo_activity = True
+	print('servo start')
+	delay = 0.1
+	for servo_angle in range(100,180):
+			kit.servo[0].angle = servo_angle
+			time.sleep(delay)
+
+	for servo_angle in range(0,180):
+			kit.servo[0].angle = 180-servo_angle
+			time.sleep(delay)
+
+	for servo_angle in range(0,100):
+			kit.servo[0].angle = servo_angle
+			time.sleep(delay)
+	servo_activity = False
+	print('servo stop')
+
+
+async def camera_capture():
+	return 0
+	"""head_rotation_map = rotation_map(
 		start_position=servo_start, 
 		end_position=servo_end, 
 		steps=int(lenght*100)
-		)
+		)"""
+	pipeline = rs.pipeline()
+	config = rs.config()
+	#config.enable_stream(rs.stream.depth,width=1280,height=720) # FPS = 30
+	#config.enable_stream(rs.stream.depth,width=640,height=480) # FPS = 60
+	config.enable_stream(rs.stream.depth,width=424,height=240) # FPS = 90
+	pipeline.start(config)
+	global depth_images = None
+	global servo_states = []
 	start_time = time.time()
-	i = 0	
+	i = 0
+	cam_ready = True
+	
 	while True:
 		frames = pipeline.wait_for_frames()
 		depth = frames.get_depth_frame()
@@ -29,47 +63,22 @@ def action(servo_states, depth_images, lenght, servo_start, servo_end):
 			depth_images = new_depth_image
 		else:
 			depth_images = np.append(depth_images, new_depth_image, axis=0)
-		if (time_diff < lenght):
-			current_servo_state = head_rotation_map[int(time_diff*100)]
-			kit.servo[0].angle = current_servo_state	
-		servo_states.append(current_servo_state)
-		if (time_diff > lenght):
-			break	
-		i += 1
-	return servo_states, depth_images
 
-# init
-kit = ServoKit(channels=16, address=0x42)
-pipeline = rs.pipeline()
-config = rs.config()
-#config.enable_stream(rs.stream.depth,width=1280,height=720) # FPS = 30
-#config.enable_stream(rs.stream.depth,width=640,height=480) # FPS = 60
-config.enable_stream(rs.stream.depth,width=424,height=240) # FPS = 90
-pipeline.start(config)
-depth_images = None
-servo_states = []
+	pipeline.stop()
 
-# look right
-servo_states, depth_images = action(servo_states, depth_images, 1, 90, 0)
-for i in range(10):
-	# look left
-	servo_states, depth_images = action(servo_states, depth_images, 1, 0, 180)
-	# look right
-	servo_states, depth_images = action(servo_states, depth_images, 2, 180, 0)
-# look front
-servo_states, depth_images = action(servo_states, depth_images, 2, 0, 90)
+	print('saving', np.array(depth_images).shape, 'images')
+	np.save('servo.npy', np.array(servo_states))
+	np.save('depth.npy', depth_images)
+	print('saved')
 
 
-print('images collected:', np.array(depth_images).shape)
-"""
-# look front
-for i in range(0,(180-90)):
-	kit.servo[0].angle = 180-i
-	time.sleep(0.03)
-"""
-pipeline.stop()
+async def main():
+	global servo_activity = False
+	global cam_ready = False
+	global servo_angle = 100
+	
+    await asyncio.gather(move_head(), camera_capture())
 
-print('saving..')
-np.save('servo.npy', np.array(servo_states))
-np.save('depth.npy', depth_images)
-print('saved')
+
+if __name__ == '__main__':
+    asyncio.run(main())
