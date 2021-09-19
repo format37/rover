@@ -31,7 +31,7 @@ async def move_head():
 	for servo_angle in range(0,100):
 			kit.servo[0].angle = servo_angle
 			time.sleep(delay)
-			
+
 	servo_activity = False
 	print('servo stop')
 
@@ -87,8 +87,15 @@ async def main():
 	servo_activity = False
 	servo_angle = 100
 
-	await asyncio.gather(move_head(), camera_capture())
+	loop = asyncio.get_event_loop()
+    loop.run_until_complete(move_head(foo(), camera_capture()))
+    loop.close()
 
+	#await asyncio.gather(move_head(), camera_capture())
+
+
+def main():
+    
 
 if __name__ == '__main__':
-	asyncio.run(main())
+    main()
