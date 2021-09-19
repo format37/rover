@@ -26,19 +26,22 @@ async def move_head():
 	print('servo ready')	
 	servo_activity = True
 	while cam_ready == False:		
-		await asyncio.sleep(1)
+		await asyncio.sleep(delay)
 		print('servo: cam_ready', cam_ready)
 	print('servo start')
 	for servo_angle in range(100,180):
 			kit.servo[0].angle = servo_angle
+			print('servo_angle', servo_angle)
 			await asyncio.sleep(delay)
 
 	for servo_angle in range(0,180):
 			kit.servo[0].angle = 180-servo_angle
+			print('servo_angle', 180-servo_angle)
 			await asyncio.sleep(delay)
 
 	for servo_angle in range(0,100):
 			kit.servo[0].angle = servo_angle
+			print('servo_angle', servo_angle)
 			await asyncio.sleep(delay)
 
 	servo_activity = False
