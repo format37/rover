@@ -71,6 +71,7 @@ async def camera_capture():
 		print('cam: servo_activity', servo_activity)
 	print('camera start')
 	while True:
+		break
 		if not servo_activity:
 			break
 		frames = pipeline.wait_for_frames()
