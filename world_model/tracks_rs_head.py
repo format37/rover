@@ -80,6 +80,9 @@ async def move_tracks():
 
 	print('Tracks start')
 	set(track = 0, speed = default_speed, direction = 0)
+	set(track = 1, speed = default_speed, direction = 0)
+	await asyncio.sleep(1)
+	set(track = 0, speed = default_speed, direction = 1)
 	set(track = 1, speed = default_speed, direction = 1)
 	await asyncio.sleep(1)
 	set(track = 0, speed = 0, direction = 0)
