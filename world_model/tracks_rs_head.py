@@ -30,7 +30,7 @@ async def move_head():
 	kit = ServoKit(channels=16, address=0x42)
 	print('servo ready')	
 	servo_activity = True
-	while cam_ready == False:		
+	while cam_ready == False or tracks_ready == False:		
 		await asyncio.sleep(delay)
 	print('servo start')
 	for servo_angle in range(100,180):
@@ -53,8 +53,10 @@ async def move_head():
 async def move_tracks():
 
 	global tracks_ready
+	last_angle = servo_angle
 
-	default_speed = 0.05
+	default_speed = 0.02
+	delay = 0.1
 
 	def set(track,speed,direction):
 		if speed>0:
@@ -77,16 +79,23 @@ async def move_tracks():
 		pca[i].channels[0].duty_cycle = 0
 		pca[i].channels[1].duty_cycle = 0xffff
 	tracks_ready = True
+	print('Tracks ready')	
+	while servo_activity == False:
+		await asyncio.sleep(delay)
 
-	print('Tracks start')
+	print('Tracks start')	
 	set(track = 0, speed = default_speed, direction = 0)
 	set(track = 1, speed = default_speed, direction = 0)
-	await asyncio.sleep(1)
+	while last_angle <= servo_angle:
+		await asyncio.sleep(delay)
 	set(track = 0, speed = default_speed, direction = 1)
 	set(track = 1, speed = default_speed, direction = 1)
-	await asyncio.sleep(1)
+	while last_angle >= servo_angle:
+		await asyncio.sleep(delay)
 	set(track = 0, speed = 0, direction = 0)
 	set(track = 1, speed = 0, direction = 0)
+	while servo_activity:
+		await asyncio.sleep(delay)
 	print('Tracks stop')
 
 async def camera_capture():
@@ -149,8 +158,8 @@ def main():
 	loop = asyncio.get_event_loop()
 	loop.run_until_complete(
 		asyncio.gather(
-			#move_head(),
-			#camera_capture(),
+			move_head(),
+			camera_capture(),
 			move_tracks()
 			)
 		)
