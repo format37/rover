@@ -1,6 +1,6 @@
 import pyrealsense2 as rs
 import numpy as np
-#import time
+import time
 from adafruit_servokit import ServoKit
 import asyncio
 
@@ -22,15 +22,18 @@ async def move_head():
 	
 	for servo_angle in range(100,180):
 			kit.servo[0].angle = servo_angle
-			time.sleep(delay)
+			#time.sleep(delay)
+			await asyncio.sleep(delay)
 
 	for servo_angle in range(0,180):
 			kit.servo[0].angle = 180-servo_angle
-			time.sleep(delay)
+			#time.sleep(delay)
+			await asyncio.sleep(delay)
 
 	for servo_angle in range(0,100):
 			kit.servo[0].angle = servo_angle
-			time.sleep(delay)
+			#time.sleep(delay)
+			await asyncio.sleep(delay)
 
 	servo_activity = False
 	print('servo stop')
