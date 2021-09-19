@@ -26,7 +26,7 @@ async def move_head():
 	global servo_activity
 	global servo_angle	
 
-	delay = 0.1
+	delay = 0.05
 	kit = ServoKit(channels=16, address=0x42)
 	print('servo ready')	
 	servo_activity = True
