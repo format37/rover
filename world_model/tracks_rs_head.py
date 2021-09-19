@@ -57,7 +57,7 @@ async def move_tracks():
 	print('Tracks init')
 	last_angle = servo_angle
 
-	default_speed = 0.08
+	default_speed = 0.2
 	delay = 0.1
 
 	def set(track,speed,direction):
