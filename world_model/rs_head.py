@@ -14,8 +14,10 @@ def rotation_map(start_position, end_position, steps):
 
 
 async def move_head():
-	global servo_activity = False
-	global servo_angle = 100
+	global servo_activity
+	servo_activity = False
+	global servo_angle
+	servo_angle = 100
 	kit = ServoKit(channels=16, address=0x42)
 	servo_activity = True
 	print('servo start')
