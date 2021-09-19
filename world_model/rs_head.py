@@ -14,14 +14,12 @@ def rotation_map(start_position, end_position, steps):
 
 
 async def move_head():
-	global servo_activity
-	servo_activity = False
-	global servo_angle
-	servo_angle = 100
-	kit = ServoKit(channels=16, address=0x42)
-	servo_activity = True
-	print('servo start')
+
 	delay = 0.1
+	servo_activity = True
+	kit = ServoKit(channels=16, address=0x42)	
+	print('servo start')
+	
 	for servo_angle in range(100,180):
 			kit.servo[0].angle = servo_angle
 			time.sleep(delay)
@@ -33,13 +31,14 @@ async def move_head():
 	for servo_angle in range(0,100):
 			kit.servo[0].angle = servo_angle
 			time.sleep(delay)
+			
 	servo_activity = False
 	print('servo stop')
 
 
 async def camera_capture():
 	return 0
-	global cam_ready = False
+	
 	"""head_rotation_map = rotation_map(
 		start_position=servo_start, 
 		end_position=servo_end, 
@@ -78,7 +77,16 @@ async def camera_capture():
 	print('saved')
 
 
-async def main():	
+async def main():
+	
+	global cam_ready
+	global servo_activity
+	global servo_angle
+
+	cam_ready = False
+	servo_activity = False
+	servo_angle = 100
+
 	await asyncio.gather(move_head(), camera_capture())
 
 
