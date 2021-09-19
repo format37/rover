@@ -47,6 +47,7 @@ async def camera_capture():
 	config.enable_stream(rs.stream.depth,width=424,height=240) # FPS = 90
 	pipeline.start(config)
 	depth_images = None
+	
 	servo_states = []
 	start_time = time.time()
 	i = 0
