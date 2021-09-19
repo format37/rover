@@ -53,9 +53,11 @@ async def move_head():
 async def move_tracks():
 
 	global tracks_ready
+	
+	print('Tracks init')
 	last_angle = servo_angle
 
-	default_speed = 0.02
+	default_speed = 0.05
 	delay = 0.1
 
 	def set(track,speed,direction):
@@ -68,7 +70,7 @@ async def move_tracks():
 		else:
 			pca[track].channels[0].duty_cycle = 0       #stop
 
-	print('Tracks init')
+	
 	i2c_bus = busio.I2C(SCL, SDA)
 	pca = [
 		PCA9685(i2c_bus,address=0x40),
@@ -79,19 +81,24 @@ async def move_tracks():
 		pca[i].channels[0].duty_cycle = 0
 		pca[i].channels[1].duty_cycle = 0xffff
 	tracks_ready = True
+
 	print('Tracks ready')	
 	while servo_activity == False:
 		await asyncio.sleep(delay)
 
 	print('Tracks start')	
-	set(track = 0, speed = default_speed, direction = 0)
-	set(track = 1, speed = default_speed, direction = 0)
-	while last_angle <= servo_angle:
-		await asyncio.sleep(delay)
 	set(track = 0, speed = default_speed, direction = 1)
 	set(track = 1, speed = default_speed, direction = 1)
-	"""while last_angle >= servo_angle:
-		await asyncio.sleep(delay)"""
+	while last_angle <= servo_angle:
+		last_angle = servo_angle
+		await asyncio.sleep(delay)
+	set(track = 0, speed = default_speed, direction = 0)
+	set(track = 1, speed = default_speed, direction = 0)
+	while last_angle >= servo_angle:
+		last_angle = servo_angle
+		await asyncio.sleep(delay)
+	set(track = 0, speed = default_speed, direction = 1)
+	set(track = 1, speed = default_speed, direction = 1)		
 	while servo_activity:
 		await asyncio.sleep(delay)
 	set(track = 0, speed = 0, direction = 0)
