@@ -88,7 +88,7 @@ def main():
 	servo_angle = 100
 
 	loop = asyncio.get_event_loop()
-	loop.run_until_complete(move_head(foo(), camera_capture()))
+	loop.run_until_complete(asyncio.gather(move_head(), camera_capture()))
 	loop.close()
 
 	#await asyncio.gather(move_head(), camera_capture())
