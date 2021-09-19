@@ -46,7 +46,7 @@ async def camera_capture():
 	#config.enable_stream(rs.stream.depth,width=1280,height=720) # FPS = 30
 	#config.enable_stream(rs.stream.depth,width=640,height=480) # FPS = 60
 	config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 30) # FPS = 90
-	rs.align(rs.stream.color) # new
+	align = rs.align(rs.stream.color) # new
 	pipeline.start(config)
 	depth_images = None
 	
