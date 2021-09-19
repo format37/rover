@@ -15,6 +15,12 @@ import asyncio
 
 async def move_head():
 
+	global servo_activity
+	global servo_angle
+	
+	servo_activity = False
+	servo_angle = 100
+
 	delay = 0.1
 	kit = ServoKit(channels=16, address=0x42)
 	print('servo ready')	
@@ -85,13 +91,6 @@ async def camera_capture():
 
 
 def main():
-	
-	
-	global servo_activity
-	global servo_angle
-	
-	servo_activity = False
-	servo_angle = 100
 
 	loop = asyncio.get_event_loop()
 	loop.run_until_complete(asyncio.gather(move_head(), camera_capture()))
