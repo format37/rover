@@ -3,9 +3,8 @@ import busio
 from adafruit_pca9685 import PCA9685
 import time
 
-direction = 'f'
 default_speed = 0.05
-delay = 2
+delay = 3
 
 def set(track,speed,direction):
 	if speed>0:
@@ -26,21 +25,21 @@ pca = [
 
 print('start')
 cmd = ''
-while cmd != 'q':
+while cmd != 'x':
 	cmd = input('cmd: ')
-	if cmd == 'f':
+	if cmd == 'w':
 		# tracks go front
 		set(track = 0, speed = default_speed, direction = 0)
 		set(track = 1, speed = default_speed, direction = 1)
-	elif cmd == 'b':
+	elif cmd == 's':
 		# tracks go back
 		set(track = 0, speed = default_speed, direction = 1)
 		set(track = 1, speed = default_speed, direction = 0)
-	elif cmd == 'l':
+	elif cmd == 'd':
 		# tracks go left
 		set(track = 0, speed = default_speed, direction = 0)
 		set(track = 1, speed = default_speed, direction = 0)
-	elif cmd == 'r':
+	elif cmd == 'a':
 		# tracks go right
 		set(track = 0, speed = default_speed, direction = 1)
 		set(track = 1, speed = default_speed, direction = 1)
