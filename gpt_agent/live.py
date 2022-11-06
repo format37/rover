@@ -109,7 +109,7 @@ def main():
         # r.text is text answer from server with structure like:
         # {"description":"['a woman sitting in a chair with a laptop']"}
         # ToDo: Extract the description value
-        description = [json.loads(r.text)['description']]
+        description = json.loads(r.text)['description'][0]
         end_time = dt.now()
         logging.info(str(end_time)+': Image description: '+description)
         logging.info(str(end_time)+': Received response from server')
