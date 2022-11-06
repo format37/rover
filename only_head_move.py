@@ -5,6 +5,7 @@ from adafruit_servokit import ServoKit
 kit = ServoKit(channels=16, address=0x42)
 
 def move_head(answer, last_head_position):
+        head_delay = 0.2
         print(answer)
         if answer == 'Look front':
                 new_head_position = 90
