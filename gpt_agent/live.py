@@ -110,14 +110,14 @@ def main():
         # {"description":"['a woman sitting in a chair with a laptop']"}
         # ToDo: Extract the description value
         description = json.loads(r.text)['description']
+        # remove first two symbols from description
+        description = description[2:]
+        # remove last 2 symbols from description
+        description = description[:-2]
         end_time = dt.now()
         logging.info(str(end_time)+': Image description: '+description)
         logging.info(str(end_time)+': Received response from server')
         logging.info(str(end_time - start_time)+': Time taken to send image and receive response')
-        print(type(description))
-        print(len(description))
-        print(description)
-        print(description[0])
         prompt += '\n'+'I see: '+description
         exit()
 
