@@ -12,6 +12,8 @@ from adafruit_servokit import ServoKit
 from board import SCL, SDA
 import busio
 from adafruit_pca9685 import PCA9685
+# cv2 imports
+import cv2
 
 
 # enable logging
@@ -155,6 +157,8 @@ def main():
     while life_length>0:
         # Look to the world        
         color_image = camera_capture_single_nondepth_image()
+        # normalize image to overcome low light
+        color_image = cv2.normalize(color_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         # convert to jpeg
         img = Image.fromarray(color_image, 'RGB')
         path = 'color.jpg'
