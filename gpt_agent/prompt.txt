@@ -9,7 +9,7 @@ Due broken tracks, my available actions is only:
 [Look front]
 [Look right]
 
-There is my observations and movements:
+There is my movements and observations:
 My action: [Look left]
 I see: Everything blured like in a fog
 My action: [Look front]

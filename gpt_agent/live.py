@@ -59,6 +59,7 @@ def move_head(kit, answer, last_head_position):
         new_head_position = 0
     else:
         logging.info(str(dt.now())+': Unknown action: '+answer)
+        last_head_position = move_head(kit, '[Look front]', last_head_position)
         exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
