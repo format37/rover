@@ -1,6 +1,8 @@
 import pyrealsense2 as rs
 import numpy as np
-import time
+import requests
+from datetime import datetime as dt
+
 
 
 def camera_capture_single_nondepth_image():
@@ -19,6 +21,18 @@ def main():
 	# read image and save to file
 	color_image = camera_capture_single_nondepth_image()
 	np.save('color.npy', color_image)
+
+	path = 'color.npy'
+	url = 'http://192.168.1.102:20000/request'
+	files = {'file': open(path, 'rb')}
+	start_time = dt.now()
+	print(start_time)
+	r = requests.post(url, files=files)
+	end_time = dt.now()
+	print(r.text)
+	print(end_time)
+	print(end_time - start_time)
+
 
 
 if __name__ == '__main__':
