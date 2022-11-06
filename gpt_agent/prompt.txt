@@ -15,11 +15,11 @@ My available actions are:
 [look ahead]
 
 I am trying to avoid obstructions.
-The log file is strictly sequential. After each of My actions, I always see something.
+The log file is strictly sequential. After each of My actions, I always see something and tell my thoughs.
 Here are my movements and observations:
 
 My thoughs: [Let's see what I can find out about his place.]
 My action: [move ahead, look left]
-I see: Everything blurred, as if in a fog. Obstruction distance: 10
+I see: Everything blurred, as if in a fog. Obstruction distance: 500
 My thoughs: [I hope to find something soon.]
 My action: [look ahead]
