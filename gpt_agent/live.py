@@ -85,8 +85,6 @@ def main():
         stop_words = config['stop_words']
     with open(prompt_file, 'r') as f:
         prompt = f.read()
-        # remove newline character
-        prompt = prompt[:-1]
 
     # Head servo
     kit = ServoKit(channels=16, address=0x42)
@@ -111,7 +109,7 @@ def main():
         # r.text is text answer from server with structure like:
         # {"description":"['a woman sitting in a chair with a laptop']"}
         # ToDo: Extract the description value
-        description = json.loads(r.text)['description']
+        description = [json.loads(r.text)['description']]
         end_time = dt.now()
         logging.info(str(end_time)+': Image description: '+description)
         logging.info(str(end_time)+': Received response from server')
