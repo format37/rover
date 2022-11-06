@@ -28,7 +28,7 @@ def text_davinci(prompt, stop_words):
       engine="text-davinci-002",
       prompt=prompt,
       temperature=0.9,
-      max_tokens=150,
+      max_tokens=50,
       top_p=1,
       frequency_penalty=0,
       presence_penalty=0.6,
@@ -51,15 +51,15 @@ def camera_capture_single_nondepth_image():
 def move_head(kit, answer, last_head_position):
     head_delay = 0.01
     print(answer)
-    if '[Look front]' in answer:
+    if '[I look ahead]' in answer:
         new_head_position = 90
-    elif '[Look left]' in answer:
+    elif '[I look to the left]' in answer:
         new_head_position = 180
-    elif '[Look right]' in answer:
+    elif '[I look to the rigth]' in answer:
         new_head_position = 0
     else:
         logging.info(str(dt.now())+': Unknown action: '+answer)
-        last_head_position = move_head(kit, '[Look front]', last_head_position)
+        last_head_position = move_head(kit, '[I look ahead]', last_head_position)
         exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
@@ -107,9 +107,6 @@ def main():
         print(start_time)
         logging.info(str(start_time)+': Sending image to server')
         r = requests.post(url, files=files)
-        # r.text is text answer from server with structure like:
-        # {"description":"['a woman sitting in a chair with a laptop']"}
-        # ToDo: Extract the description value
         description = json.loads(r.text)['description']
         # remove first two symbols from description
         description = description[2:]
@@ -134,14 +131,14 @@ def main():
         logging.info(str(dt.now())+': Prompt: '+prompt)
 
         # Doing the reaction
-        if not '[Do nothing]' in answer:
-            last_head_position = move_head(kit, answer, last_head_position)
+        # if not '[Do nothing]' in answer:
+        last_head_position = move_head(kit, answer, last_head_position)
 
         life_length -= 1
         logging.info(str(dt.now())+': Life length: '+str(life_length))
 
     # final movement
-    move_head(kit, '[Look front]', last_head_position)
+    move_head(kit, '[I look ahead]', last_head_position)
 
 
 if __name__ == '__main__':

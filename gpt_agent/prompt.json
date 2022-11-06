@@ -1,4 +1,4 @@
 {
     "prompt_file": "prompt.txt",
-    "stop_words": ["I see:","\n"]
+    "stop_words": ["I see:"]
 }
