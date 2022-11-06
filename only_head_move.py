@@ -7,11 +7,11 @@ kit = ServoKit(channels=16, address=0x42)
 def move_head(answer, last_head_position):
         head_delay = 0.01
         print(answer)
-        if '[I look ahead]' in answer:
+        if '[look ahead]' in answer:
                 new_head_position = 90
-        elif '[I look to the left]' in answer:
+        elif '[look left]' in answer:
                 new_head_position = 180
-        elif '[I look to the right]' in answer:
+        elif '[look right]' in answer:
                 new_head_position = 0
         min_pos = min(last_head_position, new_head_position)
         max_pos = max(last_head_position, new_head_position)
@@ -27,8 +27,8 @@ def move_head(answer, last_head_position):
         return new_head_position
 
 last_head_position = 90
-last_head_position = move_head('[I look to the left]', last_head_position)
-last_head_position = move_head('[I look to the right]', last_head_position)
-last_head_position = move_head('[I look ahead]', last_head_position)
+last_head_position = move_head('[look left]', last_head_position)
+last_head_position = move_head('[look right]', last_head_position)
+last_head_position = move_head('[look ahead]', last_head_position)
 
 print('stop')

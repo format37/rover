@@ -21,7 +21,6 @@ def text_davinci(prompt, stop_words):
         token = f.read()
         # remove newline character
         token = token[:-1]
-        print(token)
 
     openai.api_key = token
     return json.loads(str(openai.Completion.create(
@@ -50,7 +49,7 @@ def camera_capture_single_nondepth_image():
 
 def move_head(kit, answer, last_head_position):
     head_delay = 0.01
-    print(answer)
+    logging.info('Move head cmd: '+answer)
     if '[I look ahead]' in answer:
         new_head_position = 90
     elif '[I look to the left]' in answer:
@@ -130,7 +129,7 @@ def main():
         logging.info(str(dt.now())+': Life length: '+str(life_length))
 
     # final movement
-    move_head(kit, '[I look ahead]', last_head_position)
+    move_head(kit, '[look ahead]', last_head_position)
     logging.info('Life log:\n'+prompt)
     logging.info('Total tokens spent: '+str(total_tokens))
 
