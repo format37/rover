@@ -137,6 +137,10 @@ def main():
         last_head_position = move_head(kit, answer, last_head_position)
 
         life_length -= 1
+        logging.info(str(dt.now())+': Life length: '+str(life_length))
+
+    # final movement
+    move_head(kit, '[Look front]', last_head_position)
 
 
 if __name__ == '__main__':
