@@ -43,11 +43,6 @@ def text_davinci(prompt, stop_words):
 def camera_capture_single_nondepth_image():
     pipeline = rs.pipeline()
     config = rs.config()
-    # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
-    # config.enable_stream(rs.stream, 640, 480, rs.format.bgr8, 30)
-    # formats: list = [rs.format.bgr8, rs.format.y8, rs.format.z16, rs.format.yuyv, rs.format.rgb8, rs.format.bgr8, rs.format.y8, rs.format.z16, rs.format.yuyv, rs.format.rgb8]
-    # checked: bgr8, rgba8, bgra8
-    # optimize for low light
     config.enable_stream(
         stream_type = rs.stream.color,
         width = 1920,
@@ -55,13 +50,28 @@ def camera_capture_single_nondepth_image():
         format = rs.format.bgr8,
         framerate = 15
         )
-    # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
     pipeline.start(config)
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
     color_image = np.asanyarray(color_frame.get_data())
     pipeline.stop()
     return color_image
+
+
+def realsense_depth_median():
+    pipeline = rs.pipeline()
+    config = rs.config()
+    config.enable_stream(
+        stream_type = rs.stream.depth,
+        width = 1280,
+        height = 720
+        )
+    pipeline.start(config)
+    frames = pipeline.wait_for_frames()
+    depth_frame = frames.get_depth_frame()
+    depth_image = np.asanyarray(depth_frame.get_data())
+    pipeline.stop()
+    return np.median(depth_image)
 
 
 def move_head(kit, answer, last_head_position):
@@ -155,7 +165,7 @@ def main():
     last_head_position = 90
 
     while life_length>0:
-        # Look to the world        
+        # === Look to the world
         color_image = camera_capture_single_nondepth_image()
         # normalize image to overcome low light
         color_image = cv2.normalize(color_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
@@ -163,8 +173,12 @@ def main():
         img = Image.fromarray(color_image, 'RGB')
         path = 'color.jpg'
         img.save(path)
+        # Obstruction distance
+        obstruction_distance = realsense_depth_median()
+        obstruction_distance = round(obstruction_distance, 2)
+        logging.info('Obstruction distance: '+str(obstruction_distance))
 
-        # Describe the world
+        # === Describe the world
         url = 'http://192.168.1.102:20000/request'
         files = {'file': open(path, 'rb')}
         r = requests.post(url, files=files)
@@ -174,9 +188,10 @@ def main():
         # remove last 2 symbols from description
         description = description[:-2]
         logging.info('I see: '+description)
-        prompt += '\n'+'I see: '+description+'\n'
+        prompt += '\n'+'I see: '+description
+        prompt += '. Obstruction distance: '+str(obstruction_distance)+'\n'
 
-        # Thinking about reaction
+        # === Thinking about reaction
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
         # replace the '\n' symbol
@@ -190,10 +205,10 @@ def main():
             logging.info('Tokens limit reached. Exit.')
             exit()
 
-        # Reaction: Move tracks
+        # === Reaction: Move tracks
         move_tracks(pca, answer)
 
-        # Reaction: Head direction
+        # === Reaction: Head direction
         last_head_position = move_head(kit, answer, last_head_position)
 
         life_length -= 1
