@@ -50,15 +50,15 @@ def camera_capture_single_nondepth_image():
 def move_head(kit, answer, last_head_position):
     head_delay = 0.01
     logging.info('Move head cmd: '+answer)
-    if '[I look ahead]' in answer:
+    if '[look ahead]' in answer:
         new_head_position = 90
-    elif '[I look to the left]' in answer:
+    elif '[look left]' in answer:
         new_head_position = 180
-    elif '[I look to the right]' in answer:
+    elif '[look right]' in answer:
         new_head_position = 0
     else:
         logging.info('Error. Unknown action: <<=['+answer+']=>>')
-        last_head_position = move_head(kit, '[I look ahead]', last_head_position)
+        last_head_position = move_head(kit, '[look ahead]', last_head_position)
         exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
