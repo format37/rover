@@ -89,7 +89,7 @@ def set_track(pca, track, speed, direction):
 
 
 def move_tracks(pca, answer):
-    default_speed = 0.05
+    default_speed = 0.07
     delay = 4
     if 'move ahead' in answer:
         # tracks go front
