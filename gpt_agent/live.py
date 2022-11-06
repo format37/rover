@@ -55,16 +55,16 @@ def move_head(kit, answer, last_head_position):
         new_head_position = 90
     elif '[I look to the left]' in answer:
         new_head_position = 180
-    elif '[I look to the rigth]' in answer:
+    elif '[I look to the right]' in answer:
         new_head_position = 0
     else:
-        logging.info(str(dt.now())+': Unknown action: '+answer)
+        logging.info('Error. Unknown action: <<=['+answer+']=>>')
         last_head_position = move_head(kit, '[I look ahead]', last_head_position)
         exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
-    print(answer, last_head_position, new_head_position)
-    print(min_pos, max_pos)
+    # print(answer, last_head_position, new_head_position)
+    # print(min_pos, max_pos)
     for i in range(min_pos, max_pos):
         if last_head_position < new_head_position:
             kit.servo[0].angle = i
