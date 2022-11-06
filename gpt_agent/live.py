@@ -112,6 +112,8 @@ def main():
         # Thinking about reaction
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
+        # replace the '\n' symbol
+        answer = answer.replace('\n', '')
         logging.info('Openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
