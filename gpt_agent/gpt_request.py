@@ -29,9 +29,11 @@ def text_davinci(prompt, stop_words):
 
 
 logging.info(str(dt.now())+' call_voice.openai conversation')
-prompt = """# Bubble sorting sample:
-"""
-stop_words = ['#']
+# read prompt from json file
+with open('prompt.json', 'r') as f:
+  config = json.load(f)
+  prompt = config['prompt']
+  stop_words = config['stop_words']
 davinchi_response = text_davinci(str(prompt), stop_words)
 answer = davinchi_response['choices'][0]['text']
 logging.info(str(dt.now())+' call_voice.openai conversation answer: '+str(answer))
