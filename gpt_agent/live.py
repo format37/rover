@@ -44,7 +44,13 @@ def camera_capture_single_nondepth_image():
     # config.enable_stream(rs.stream, 1920, 1080, rs.format.bgr8, 30)
     # config.enable_stream(rs.stream, 640, 480, rs.format.bgr8, 30)
     # optimize for low light
-    config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr16, 30)
+    config.enable_stream(
+        stream_type = rs.stream.color,
+        width = 1920,
+        height = 1080,
+        format = rs.format.mjpeg,
+        framerate = 30
+        )
     pipeline.start(config)
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
