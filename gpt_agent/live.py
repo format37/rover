@@ -84,11 +84,9 @@ def move_head(kit, answer, last_head_position):
     elif 'look right' in answer:
         new_head_position = 0
     else:
-        logging.info('No head movement')
-        return last_head_position
-        # logging.info('Error. Unknown action: <<=['+answer+']=>>')
-        # last_head_position = move_head(kit, '[look ahead]', last_head_position)
-        # exit()
+        logging.info('No head movement. Looking ahead.')
+        new_head_position = 90
+        
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
     for i in range(min_pos, max_pos):
@@ -139,6 +137,12 @@ def move_tracks(pca, answer):
     # stop
     set_track(pca, track = 0, speed = 0, direction = 0)
     set_track(pca, track = 1, speed = 0, direction = 0)
+
+
+def final_movement(kit, prompt, last_head_position, total_tokens):
+    move_head(kit, '[look ahead]', last_head_position)
+    logging.info('Life log:\n'+prompt)
+    logging.info('Total tokens spent: '+str(total_tokens))
 
 
 def main():
@@ -201,7 +205,8 @@ def main():
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
-        if total_tokens>10000:
+        if total_tokens>.30000:
+            final_movement(kit, prompt, last_head_position, total_tokens)
             logging.info('Tokens limit reached. Exit.')
             exit()
 
@@ -213,11 +218,7 @@ def main():
 
         life_length -= 1
         logging.info(str(dt.now())+': Life length: '+str(life_length))
-
-    # final movement
-    move_head(kit, '[look ahead]', last_head_position)
-    logging.info('Life log:\n'+prompt)
-    logging.info('Total tokens spent: '+str(total_tokens))
+    final_movement(kit, prompt, last_head_position, total_tokens)
 
 
 if __name__ == '__main__':
