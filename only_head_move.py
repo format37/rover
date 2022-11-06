@@ -8,11 +8,11 @@ def move_head(answer, last_head_position):
         head_delay = 0.1
         print(answer)
         if answer == 'Look front':
-                new_head_position = 90
+                new_head_position = 0
         elif answer == 'Look left':
                 new_head_position = 180
         elif answer == 'Look right':
-                new_head_position = 0
+                new_head_position = 90
         min_pos = min(last_head_position, new_head_position)
         max_pos = max(last_head_position, new_head_position)
         for i in range(min_pos, max_pos):
