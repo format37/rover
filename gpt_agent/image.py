@@ -2,7 +2,8 @@ import pyrealsense2 as rs
 import numpy as np
 import requests
 from datetime import datetime as dt
-
+# imports, required for saving to jpeg
+from PIL import Image
 
 
 def camera_capture_single_nondepth_image():
@@ -20,9 +21,12 @@ def camera_capture_single_nondepth_image():
 def main():
 	# read image and save to file
 	color_image = camera_capture_single_nondepth_image()
-	np.save('color.npy', color_image)
+	# np.save('color.npy', color_image)
+	# convert to jpeg
+	img = Image.fromarray(color_image, 'RGB')
+	img.save('color.jpg')
 
-	path = 'color.npy'
+	path = 'color.jpg'
 	url = 'http://192.168.1.102:20000/request'
 	files = {'file': open(path, 'rb')}
 	start_time = dt.now()
