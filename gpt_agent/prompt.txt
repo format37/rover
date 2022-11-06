@@ -9,8 +9,3 @@ My available actions:
 * Look front
 * Look right
 There is my observations and movements:
-
-I see: a bed in a room with a lamp on top of it
-My action: Look left
-I see: a person laying on a bed in a room
-My action:

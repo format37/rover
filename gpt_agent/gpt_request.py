@@ -28,7 +28,6 @@ def text_davinci(prompt, stop_words):
     )))
 
 
-
 # read prompt from json file
 with open('prompt.json', 'r') as f:
   config = json.load(f)
