@@ -9,6 +9,7 @@ Due broken tracks, my available actions is only:
 [Look front]
 [Look right]
 
+The log file is a strictly sequent. After My action, I always see something.
 There is my movements and observations:
 My action: [Look left]
 I see: Everything blured like in a fog
