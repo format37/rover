@@ -63,8 +63,6 @@ def move_head(kit, answer, last_head_position):
         exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
-    # print(answer, last_head_position, new_head_position)
-    # print(min_pos, max_pos)
     for i in range(min_pos, max_pos):
         if last_head_position < new_head_position:
             kit.servo[0].angle = i
@@ -90,7 +88,6 @@ def main():
     # Head servo
     kit = ServoKit(channels=16, address=0x42)
     last_head_position = 90
-    head_delay = 3
 
     while life_length>0:
         # Look to the world        
@@ -103,32 +100,25 @@ def main():
         # Describe the world
         url = 'http://192.168.1.102:20000/request'
         files = {'file': open(path, 'rb')}
-        start_time = dt.now()
-        print(start_time)
-        logging.info(str(start_time)+': Sending image to server')
         r = requests.post(url, files=files)
         description = json.loads(r.text)['description']
         # remove first two symbols from description
         description = description[2:]
         # remove last 2 symbols from description
         description = description[:-2]
-        end_time = dt.now()
-        logging.info(str(end_time)+': Image description: '+description)
-        logging.info(str(end_time)+': Received response from server')
-        logging.info(str(end_time - start_time)+': Time taken to send image and receive response')
+        logging.info('I see: '+description)
         prompt += '\n'+'I see: '+description+'\n'
 
         # Thinking about reaction
-        logging.info(str(dt.now())+' call openai generator')
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        logging.info(str(dt.now())+' openai answer: ['+str(answer)+']')
+        logging.info('Openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
-        logging.info(str(dt.now())+' Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
+        logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
 
-        logging.info(str(dt.now())+': Prompt: '+prompt)
+        # logging.info(str(dt.now())+': Prompt: '+prompt)
 
         # Doing the reaction
         # if not '[Do nothing]' in answer:
@@ -139,6 +129,8 @@ def main():
 
     # final movement
     move_head(kit, '[I look ahead]', last_head_position)
+    logging.info('Life log:\n'+prompt)
+    logging.info('Total tokens spent: '+str(total_tokens))
 
 
 if __name__ == '__main__':
