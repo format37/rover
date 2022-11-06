@@ -118,6 +118,9 @@ def main():
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
+        if total_tokens>10000:
+            logging.info('Tokens limit reached. Exit.')
+            exit()
 
         # logging.info(str(dt.now())+': Prompt: '+prompt)
 
