@@ -4,7 +4,7 @@ I am living in infinity loop:
 * Looking for a world and describing a picture which i see
 * Make a movements
 And so on..
-My available actions:
+Due broken tracks, my available actions is only:
 Look left
 Look front
 Look right
