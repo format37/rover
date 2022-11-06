@@ -108,11 +108,12 @@ def main():
         print(start_time)
         logging.info(str(start_time)+': Sending image to server')
         r = requests.post(url, files=files)
+        description = r.text['description']
         end_time = dt.now()
-        logging.info(str(end_time)+': Image description: '+r.text)
+        logging.info(str(end_time)+': Image description: '+description)
         logging.info(str(end_time)+': Received response from server')
         logging.info(str(end_time - start_time)+': Time taken to send image and receive response')
-        prompt += '\n'+'I see: '+r.text
+        prompt += '\n'+'I see: '+description
 
         # Thinking about reaction
         logging.info(str(dt.now())+' call_voice.openai conversation')
