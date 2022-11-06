@@ -8,6 +8,7 @@ Due broken tracks, my available actions is only:
 [Look left]
 [Look front]
 [Look right]
+[Do nothing]
 
 The log file is a strictly sequent. After My action, I always see something.
 There is my movements and observations:
