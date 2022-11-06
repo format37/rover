@@ -39,15 +39,18 @@ def text_davinci(prompt, stop_words):
 
 
 def camera_capture_single_nondepth_image():
-	pipeline = rs.pipeline()
-	config = rs.config()
-	config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-	pipeline.start(config)
-	frames = pipeline.wait_for_frames()
-	color_frame = frames.get_color_frame()
-	color_image = np.asanyarray(color_frame.get_data())
-	pipeline.stop()
-	return color_image
+    pipeline = rs.pipeline()
+    config = rs.config()
+    # config.enable_stream(rs.stream, 1920, 1080, rs.format.bgr8, 30)
+    # config.enable_stream(rs.stream, 640, 480, rs.format.bgr8, 30)
+    # optimize for low light
+    config.enable_stream(rs.stream.infrared, 1, 640, 480, rs.format.y8, 30)
+    pipeline.start(config)
+    frames = pipeline.wait_for_frames()
+    color_frame = frames.get_color_frame()
+    color_image = np.asanyarray(color_frame.get_data())
+    pipeline.stop()
+    return color_image
 
 
 def move_head(kit, answer, last_head_position):
