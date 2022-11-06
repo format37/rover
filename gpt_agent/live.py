@@ -50,7 +50,7 @@ def camera_capture_single_nondepth_image():
         stream_type = rs.stream.color,
         width = 1920,
         height = 1080,
-        format = rs.format.mjpeg,
+        format = rs.format.bgra8,
         framerate = 30
         )
     # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
