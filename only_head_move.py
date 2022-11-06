@@ -27,8 +27,8 @@ def move_head(answer, last_head_position):
         return new_head_position
 
 last_head_position = 90
-last_head_position = move_head('I look to the left', last_head_position)
-last_head_position = move_head('I look to the right', last_head_position)
-last_head_position = move_head('I look ahead', last_head_position)
+last_head_position = move_head('[I look to the left]', last_head_position)
+last_head_position = move_head('[I look to the right]', last_head_position)
+last_head_position = move_head('[I look ahead]', last_head_position)
 
 print('stop')
