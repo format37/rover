@@ -108,7 +108,10 @@ def main():
         print(start_time)
         logging.info(str(start_time)+': Sending image to server')
         r = requests.post(url, files=files)
-        description = r.text['description']
+        # r.text is text answer from server with structure like:
+        # {"description":"['a woman sitting in a chair with a laptop']"}
+        # ToDo: Extract the description value
+        description = json.loads(r.text)['description']
         end_time = dt.now()
         logging.info(str(end_time)+': Image description: '+description)
         logging.info(str(end_time)+': Received response from server')
