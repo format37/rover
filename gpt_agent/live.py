@@ -127,7 +127,7 @@ def main():
         logging.info(str(dt.now())+' call_voice.openai conversation answer: '+str(answer))
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
-        logging.info(str(dt.now())+' Tokens spent: '+str(tokens_spent))
+        logging.info(str(dt.now())+' Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + '\nMy action: ' + answer
 
         logging.info(str(dt.now())+': Prompt: '+prompt)

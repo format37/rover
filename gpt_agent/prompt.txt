@@ -5,9 +5,11 @@ I am living in infinity loop:
 * Make a movements
 And so on..
 Due broken tracks, my available actions is only:
-Look left
-Look front
-Look right
+[Look left]
+[Look front]
+[Look right]
 
 There is my observations and movements:
-My action: Look front
+My action: [Look left]
+I see: Everything bloored like in a fog
+My action: [Look front]
