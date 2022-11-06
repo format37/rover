@@ -51,11 +51,11 @@ def camera_capture_single_nondepth_image():
 def move_head(answer, last_head_position):
     head_delay = 0.01
     print(answer)
-    if answer == 'Look front':
+    if '[Look front]' in answer:
         new_head_position = 90
-    elif answer == 'Look left':
+    elif '[Look left]' in answer:
         new_head_position = 180
-    elif answer == 'Look right':
+    elif '[Look right]' in answer:
         new_head_position = 0
     else:
         logging.info(str(dt.now())+': Unknown action: '+answer)
@@ -128,16 +128,10 @@ def main():
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info(str(dt.now())+' Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
-        prompt = prompt + '\nMy action: ' + answer
+        prompt = prompt + answer
 
         logging.info(str(dt.now())+': Prompt: '+prompt)
 
-        exit()
-        
-        # My available actions:
-        #     * Look left
-        #     * Look front
-        #     * Look right
         # Doing the reaction
         last_head_position = move_head(answer, last_head_position)
 
