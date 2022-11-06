@@ -9,6 +9,9 @@ from datetime import datetime as dt
 from PIL import Image
 import time
 from adafruit_servokit import ServoKit
+from board import SCL, SDA
+import busio
+from adafruit_pca9685 import PCA9685
 
 
 # enable logging
@@ -50,16 +53,18 @@ def camera_capture_single_nondepth_image():
 def move_head(kit, answer, last_head_position):
     head_delay = 0.01
     logging.info('Move head cmd: '+answer)
-    if '[look ahead]' in answer:
+    if 'look ahead' in answer:
         new_head_position = 90
-    elif '[look left]' in answer:
+    elif 'look left' in answer:
         new_head_position = 180
-    elif '[look right]' in answer:
+    elif 'look right' in answer:
         new_head_position = 0
     else:
-        logging.info('Error. Unknown action: <<=['+answer+']=>>')
-        last_head_position = move_head(kit, '[look ahead]', last_head_position)
-        exit()
+        logging.info('No head movement')
+        return last_head_position
+        # logging.info('Error. Unknown action: <<=['+answer+']=>>')
+        # last_head_position = move_head(kit, '[look ahead]', last_head_position)
+        # exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
     for i in range(min_pos, max_pos):
@@ -70,6 +75,46 @@ def move_head(kit, answer, last_head_position):
         time.sleep(head_delay)
     last_head_position = new_head_position
     return new_head_position
+
+
+def set_track(pca, track, speed, direction):
+	if speed>0:
+		frequency = speed*2300
+		direction = direction*0xffff
+		pca[track].frequency = int(frequency)
+		pca[track].channels[1].duty_cycle = int(direction)
+		pca[track].channels[0].duty_cycle = 0x7fff  #go
+	else:
+		pca[track].channels[0].duty_cycle = 0       #stop
+
+
+def move_tracks(pca, answer):
+    default_speed = 0.05
+    delay = 4
+    if 'move ahead' in answer:
+        # tracks go front
+        set_track(pca, track = 0, speed = default_speed, direction = 0)
+        set_track(pca, track = 1, speed = default_speed, direction = 1)
+    elif 'move backward' in answer:
+        # tracks go back
+        set_track(pca, track = 0, speed = default_speed, direction = 1)
+        set_track(pca, track = 1, speed = default_speed, direction = 0)
+    elif 'turn right' in answer:
+        # tracks go left
+        set_track(pca, track = 0, speed = default_speed, direction = 0)
+        set_track(pca, track = 1, speed = default_speed, direction = 0)
+    elif 'turn left' in answer:
+        # tracks go right
+        set_track(pca, track = 0, speed = default_speed, direction = 1)
+        set_track(pca, track = 1, speed = default_speed, direction = 1)
+    else:
+        logging.info('No track movement')
+        return
+
+    time.sleep(delay)
+    # stop
+    set_track(pca, track = 0, speed = 0, direction = 0)
+    set_track(pca, track = 1, speed = 0, direction = 0)
 
 
 def main():
@@ -83,6 +128,13 @@ def main():
         stop_words = config['stop_words']
     with open(prompt_file, 'r') as f:
         prompt = f.read()
+
+    # Tracks init
+    i2c_bus = busio.I2C(SCL, SDA)
+    pca = [
+        PCA9685(i2c_bus,address=0x40),
+        PCA9685(i2c_bus,address=0x41)
+        ]
 
     # Head servo
     kit = ServoKit(channels=16, address=0x42)
@@ -122,10 +174,10 @@ def main():
             logging.info('Tokens limit reached. Exit.')
             exit()
 
-        # logging.info(str(dt.now())+': Prompt: '+prompt)
+        # Reaction: Move tracks
+        move_tracks(pca, answer)
 
-        # Doing the reaction
-        # if not '[Do nothing]' in answer:
+        # Reaction: Head direction
         last_head_position = move_head(kit, answer, last_head_position)
 
         life_length -= 1
