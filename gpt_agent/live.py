@@ -119,7 +119,6 @@ def main():
         logging.info(str(end_time)+': Received response from server')
         logging.info(str(end_time - start_time)+': Time taken to send image and receive response')
         prompt += '\n'+'I see: '+description
-        exit()
 
         # Thinking about reaction
         logging.info(str(dt.now())+' call_voice.openai conversation')
@@ -128,10 +127,12 @@ def main():
         logging.info(str(dt.now())+' call_voice.openai conversation answer: '+str(answer))
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
-        logging.info(str(dt.now())+' call_voice.openai conversation total_tokens: '+str(tokens_spent))
+        logging.info(str(dt.now())+' Tokens spent: '+str(tokens_spent))
         prompt = prompt + '\nMy action: ' + answer
 
         logging.info(str(dt.now())+': Prompt: '+prompt)
+
+        exit()
         
         # My available actions:
         #     * Look left
