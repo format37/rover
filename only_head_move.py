@@ -26,32 +26,9 @@ def move_head(answer, last_head_position):
         last_head_position = new_head_position
         return new_head_position
 
-# delay = 0.01
-"""print('90,180')
-for i in range(90,180):
-	kit.servo[0].angle = i
-	time.sleep(delay)
-
-print('0,180')
-for i in range(0,180):
-        kit.servo[0].angle = 180-i
-        time.sleep(delay)
-
-print('0,90')
-for i in range(0,90):
-        kit.servo[0].angle = i
-        time.sleep(delay)
-"""
 last_head_position = 90
 last_head_position = move_head('Look left', last_head_position)
 last_head_position = move_head('Look right', last_head_position)
 last_head_position = move_head('Look front', last_head_position)
-last_head_position = move_head('Look left', last_head_position)
-last_head_position = move_head('Look left', last_head_position)
-last_head_position = move_head('Look front', last_head_position)
-# last_head_position = move_head('Look left', last_head_position)
-# last_head_position = move_head('Look left', last_head_position)
-# last_head_position = move_head('Look right', last_head_position)
-# last_head_position = move_head('Look front', last_head_position)
 
 print('stop')

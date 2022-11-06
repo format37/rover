@@ -48,6 +48,28 @@ def camera_capture_single_nondepth_image():
 	return color_image
 
 
+def move_head(answer, last_head_position):
+    head_delay = 0.01
+    print(answer)
+    if answer == 'Look front':
+        new_head_position = 90
+    elif answer == 'Look left':
+        new_head_position = 180
+    elif answer == 'Look right':
+        new_head_position = 0
+    min_pos = min(last_head_position, new_head_position)
+    max_pos = max(last_head_position, new_head_position)
+    print(answer, last_head_position, new_head_position)
+    print(min_pos, max_pos)
+    for i in range(min_pos, max_pos):
+        if last_head_position < new_head_position:
+            kit.servo[0].angle = i
+        else:
+            kit.servo[0].angle = max_pos+min_pos-i
+        time.sleep(head_delay)
+    last_head_position = new_head_position
+    return new_head_position
+
 
 def main():
     life_length = 3
@@ -98,27 +120,15 @@ def main():
         total_tokens += tokens_spent
         logging.info(str(dt.now())+' call_voice.openai conversation total_tokens: '+str(tokens_spent))
         prompt = prompt + '\nMy action: ' + answer
+
+        logging.info(str(dt.now())+': Prompt: '+prompt)
         
         # My available actions:
         #     * Look left
         #     * Look front
         #     * Look right
         # Doing the reaction
-        if answer == 'Look front':
-            new_head_position = 90
-        elif answer == 'Look left':
-            new_head_position = 0
-        elif answer == 'Look right':
-            new_head_position = 180
-        min_pos = min(last_head_position, new_head_position)
-        max_pos = max(last_head_position, new_head_position)
-        for i in range(min_pos, max_pos):
-            if last_head_position < new_head_position:
-                kit.servo[0].angle = i
-            else:
-                kit.servo[0].angle = max_pos-i
-            time.sleep(head_delay*(max_pos-min_pos)/90)
-        last_head_position = new_head_position
+        last_head_position = move_head(answer, last_head_position)
 
         life_length -= 1
 
