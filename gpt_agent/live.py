@@ -48,8 +48,8 @@ def camera_capture_single_nondepth_image():
         stream_type = rs.stream.color,
         width = 1920,
         height = 1080,
-        format = rs.format.bgr8,
-        framerate = 1
+        format = rs.format.rgba8,
+        framerate = 30
         )
     # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
     pipeline.start(config)
@@ -128,7 +128,7 @@ def move_tracks(pca, answer):
 
 
 def main():
-    life_length = 8
+    life_length = 2
     total_tokens = 0
 
     # read prompt from json file
