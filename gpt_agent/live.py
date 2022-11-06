@@ -118,13 +118,13 @@ def main():
         logging.info(str(end_time)+': Image description: '+description)
         logging.info(str(end_time)+': Received response from server')
         logging.info(str(end_time - start_time)+': Time taken to send image and receive response')
-        prompt += '\n'+'I see: '+description
+        prompt += '\n'+'I see: '+description+'\n'
 
         # Thinking about reaction
-        logging.info(str(dt.now())+' call_voice.openai conversation')
+        logging.info(str(dt.now())+' call openai generator')
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        logging.info(str(dt.now())+' call_voice.openai conversation answer: '+str(answer))
+        logging.info(str(dt.now())+' openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info(str(dt.now())+' Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
