@@ -118,7 +118,7 @@ def move_tracks(pca, answer):
 
 
 def main():
-    life_length = 3
+    life_length = 15
     total_tokens = 0
 
     # read prompt from json file
