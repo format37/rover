@@ -28,12 +28,18 @@ def text_davinci(prompt, stop_words):
     )))
 
 
-logging.info(str(dt.now())+' call_voice.openai conversation')
+
 # read prompt from json file
 with open('prompt.json', 'r') as f:
-    config = json.load(f)
-    prompt = config['prompt']
-    stop_words = config['stop_words']
+  config = json.load(f)
+  prompt_file = config['prompt_file']
+  stop_words = config['stop_words']
+with open(prompt_file, 'r') as f:
+  prompt = f.read()
+  # remove newline character
+  prompt = prompt[:-1]
+
+logging.info(str(dt.now())+' call_voice.openai conversation')
 davinchi_response = text_davinci(str(prompt), stop_words)
 answer = davinchi_response['choices'][0]['text']
 logging.info(str(dt.now())+' call_voice.openai conversation answer: '+str(answer))
