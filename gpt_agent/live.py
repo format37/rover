@@ -134,7 +134,8 @@ def main():
         logging.info(str(dt.now())+': Prompt: '+prompt)
 
         # Doing the reaction
-        last_head_position = move_head(kit, answer, last_head_position)
+        if not '[Do nothing]' in answer:
+            last_head_position = move_head(kit, answer, last_head_position)
 
         life_length -= 1
         logging.info(str(dt.now())+': Life length: '+str(life_length))
