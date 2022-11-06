@@ -86,7 +86,7 @@ def move_head(kit, answer, last_head_position):
     else:
         logging.info('No head movement. Looking ahead.')
         new_head_position = 90
-        
+
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
     for i in range(min_pos, max_pos):
@@ -205,7 +205,7 @@ def main():
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
-        if total_tokens>.30000:
+        if total_tokens>30000:
             final_movement(kit, prompt, last_head_position, total_tokens)
             logging.info('Tokens limit reached. Exit.')
             exit()
