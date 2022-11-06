@@ -48,7 +48,7 @@ def camera_capture_single_nondepth_image():
 	return color_image
 
 
-def move_head(answer, last_head_position):
+def move_head(kit, answer, last_head_position):
     head_delay = 0.01
     print(answer)
     if '[Look front]' in answer:
@@ -133,7 +133,7 @@ def main():
         logging.info(str(dt.now())+': Prompt: '+prompt)
 
         # Doing the reaction
-        last_head_position = move_head(answer, last_head_position)
+        last_head_position = move_head(kit, answer, last_head_position)
 
         life_length -= 1
 
