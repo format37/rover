@@ -5,7 +5,10 @@ I live in an endless loop:
 * I tell my thoughts
 * I am making a small movement
 And so on, again, endlessly ..
-My available actions are:
+
+I am trying to avoid obstructions.
+The log file is strictly sequential. After each of My actions, I always see something and tell my thoughs.
+My available actions strictly are:
 [turn left]
 [turn right]
 [move ahead]
@@ -14,9 +17,7 @@ My available actions are:
 [look right]
 [look ahead]
 
-I am trying to avoid obstructions.
-The log file is strictly sequential. After each of My actions, I always see something and tell my thoughs.
-Here are my movements and observations:
+Here are my latest movements and observations:
 
 My thoughs: [Let's see what I can find out about his place.]
 My action: [move ahead, look left]
