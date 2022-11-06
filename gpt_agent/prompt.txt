@@ -5,7 +5,8 @@ I am living in infinity loop:
 * Make a movements
 And so on..
 My available actions:
-* Look left
-* Look front
-* Look right
+Look left
+Look front
+Look right
+
 There is my observations and movements:

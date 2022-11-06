@@ -57,6 +57,9 @@ def move_head(answer, last_head_position):
         new_head_position = 180
     elif answer == 'Look right':
         new_head_position = 0
+    else:
+        logging.info(str(dt.now())+': Unknown action: '+answer)
+        exit()
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
     print(answer, last_head_position, new_head_position)
