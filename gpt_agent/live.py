@@ -44,13 +44,13 @@ def camera_capture_single_nondepth_image():
     # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
     # config.enable_stream(rs.stream, 640, 480, rs.format.bgr8, 30)
     # formats: list = [rs.format.bgr8, rs.format.y8, rs.format.z16, rs.format.yuyv, rs.format.rgb8, rs.format.bgr8, rs.format.y8, rs.format.z16, rs.format.yuyv, rs.format.rgb8]
-    # checked: bgr8, rgba8, 
+    # checked: bgr8, rgba8, bgra8
     # optimize for low light
     config.enable_stream(
         stream_type = rs.stream.color,
         width = 1920,
         height = 1080,
-        format = rs.format.bgra8,
+        format = rs.format.y16,
         framerate = 30
         )
     # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
