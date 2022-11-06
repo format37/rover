@@ -44,9 +44,9 @@ for i in range(0,90):
         time.sleep(delay)
 """
 last_head_position = 90
-last_head_position = move_head('Look left', last_head_position)
+last_head_position = move_head('Look right', last_head_position)
 last_head_position = move_head('Look front', last_head_position)
-# last_head_position = move_head('Look right', last_head_position)
+# last_head_position = move_head('Look left', last_head_position)
 # last_head_position = move_head('Look left', last_head_position)
 # last_head_position = move_head('Look right', last_head_position)
 # last_head_position = move_head('Look front', last_head_position)
