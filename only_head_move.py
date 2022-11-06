@@ -21,8 +21,7 @@ def move_head(answer, last_head_position):
                 if last_head_position < new_head_position:
                         kit.servo[0].angle = i
                 else:
-                        kit.servo[0].angle = max_pos-i
-                # time.sleep(head_delay*(max_pos-min_pos)/90)
+                        kit.servo[0].angle = max_pos+min_pos-i
                 time.sleep(head_delay)
         last_head_position = new_head_position
         return new_head_position
