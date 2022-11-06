@@ -49,7 +49,7 @@ def camera_capture_single_nondepth_image():
         width = 1920,
         height = 1080,
         format = rs.format.bgr8,
-        framerate = 30
+        framerate = 1
         )
     # config.enable_stream(rs.stream, 0, 1920, 1080, rs.format.bgr8, 30)
     pipeline.start(config)
