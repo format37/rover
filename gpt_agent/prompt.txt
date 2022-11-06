@@ -6,7 +6,7 @@ I live in an endless loop:
 And so on, again, endlessly ..
 Due to the broken tracks, my available actions are:
 [I look to the left]
-[I look to the rigth]
+[I look to the right]
 [I look ahead]
 
 The log file is strictly sequential. After each of My actions, I always see something.
