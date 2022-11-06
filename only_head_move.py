@@ -7,11 +7,11 @@ kit = ServoKit(channels=16, address=0x42)
 def move_head(answer, last_head_position):
         head_delay = 0.01
         print(answer)
-        if answer == 'I look ahead':
+        if '[I look ahead]' in answer:
                 new_head_position = 90
-        elif answer == 'I look to the left':
+        elif '[I look to the left]' in answer:
                 new_head_position = 180
-        elif answer == 'I look to the right':
+        elif '[I look to the right]' in answer:
                 new_head_position = 0
         min_pos = min(last_head_position, new_head_position)
         max_pos = max(last_head_position, new_head_position)
