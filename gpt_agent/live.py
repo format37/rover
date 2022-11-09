@@ -226,6 +226,10 @@ def main():
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
+        # remove } from answer
+        answer = answer.replace('}', '')
+        # remove ] from answer
+        answer = answer.replace(']', '')
         prompt = prompt + answer
         if total_tokens>30000:
             # if True:
