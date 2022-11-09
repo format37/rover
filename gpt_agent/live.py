@@ -154,7 +154,7 @@ def main():
         config = json.load(f)
         prompt_file = config['prompt_file']
         # stop_words = config['stop_words']
-        stop_words = ['"see:"']
+        stop_words = ['"see":']
     with open(prompt_file, 'r') as f:
         prompt = f.read()
 
