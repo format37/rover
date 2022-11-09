@@ -232,7 +232,7 @@ def main():
             final_movement(kit, prompt, last_head_position, total_tokens)
             logging.info('Tokens limit reached. Exit.')
             exit()
-        logging('Prompt: **'+prompt+'**')
+        logging.info('Prompt: **'+prompt+'**')
         res = prompt_json(prompt)
         answer = str(json.loads(res))
 
