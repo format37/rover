@@ -31,11 +31,11 @@ def text_davinci(prompt, stop_words):
     return json.loads(str(openai.Completion.create(
       engine="text-davinci-002",
       prompt=prompt,
-      temperature=0.9,
-      max_tokens=50,
+      temperature=0.8,
+      max_tokens=60,
       top_p=1,
-      frequency_penalty=0,
-      presence_penalty=0.6,
+      frequency_penalty=0.5,
+      presence_penalty=0,
       stop=stop_words
     )))
 
@@ -146,14 +146,15 @@ def final_movement(kit, prompt, last_head_position, total_tokens):
 
 
 def main():
-    life_length = 20
+    life_length = 3
     total_tokens = 0
 
     # read prompt from json file
     with open('prompt.json', 'r') as f:
         config = json.load(f)
         prompt_file = config['prompt_file']
-        stop_words = config['stop_words']
+        # stop_words = config['stop_words']
+        stop_words = ['"see:"']
     with open(prompt_file, 'r') as f:
         prompt = f.read()
 
@@ -169,7 +170,7 @@ def main():
     last_head_position = 90
 
     while life_length>0:
-        # === Look to the world
+        # === See: Look to the world
         color_image = camera_capture_single_nondepth_image()
         # normalize image to overcome low light
         color_image = cv2.normalize(color_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
@@ -177,7 +178,7 @@ def main():
         img = Image.fromarray(color_image, 'RGB')
         path = 'color.jpg'
         img.save(path)
-        # Obstruction distance
+        # === Obstruction distance
         obstruction_distance = realsense_depth_median()
         obstruction_distance = round(obstruction_distance, 2)
         logging.info('Obstruction distance: '+str(obstruction_distance))
@@ -191,9 +192,13 @@ def main():
         description = description[2:]
         # remove last 2 symbols from description
         description = description[:-2]
-        logging.info('I see: '+description)
-        prompt += '\n'+'I see: '+description
-        prompt += '. Obstruction distance: '+str(obstruction_distance)+'\n'
+        
+        logging.info('== see: '+description)
+        prompt += '\n'+'        "see": "'+description+'",'
+        logging.info('== obstruction distance: '+str(obstruction_distance))
+        prompt += '\n'+'        "obstruction_distance": '+str(obstruction_distance)+','
+        # === Think
+        prompt += '\n'+'        "my_thoughs":'
 
         # === Thinking about reaction
         davinchi_response = text_davinci(str(prompt), stop_words)
@@ -205,7 +210,8 @@ def main():
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
-        if total_tokens>30000:
+        # if total_tokens>30000:
+        if True:
             final_movement(kit, prompt, last_head_position, total_tokens)
             logging.info('Tokens limit reached. Exit.')
             exit()

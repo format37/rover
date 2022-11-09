@@ -17,10 +17,19 @@ My available actions strictly are:
 [look right]
 [look ahead]
 Any other actions are not supported.
-Here are my latest movements and observations:
+Here are my latest interaction batches:
 
-My thoughs: {Let's see what I can find out about his place.}
-My action: [move ahead, look left]
-I see: Everything blurred, as if in a fog. Obstruction distance: 500
-My thoughs: {I hope to find something soon.}
-My action: [look ahead]
+[
+    {
+        "see": "Everything blurred, as if in a fog.",
+        "obstruction_distance": 527,
+        "my_thoughs": "Let's see what I can find out about his place.",
+        "my_action": ["move backward", "look left"]
+    },
+    {
+        "see": "Dark space.",
+        "obstruction_distance": 519,
+        "my_thoughs": "I hope to find something soon.",
+        "my_action": ["look ahead"]
+    },
+    {
