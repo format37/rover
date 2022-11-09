@@ -141,7 +141,7 @@ def move_tracks(pca, answer):
 
 def final_movement(kit, prompt, last_head_position, total_tokens):
     move_head(kit, '[look ahead]', last_head_position)
-    logging.info('Life log:\n'+prompt)
+    logging.info('Life log:\n*'+prompt+'*')
     logging.info('Total tokens spent: '+str(total_tokens))
 
 
