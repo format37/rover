@@ -145,7 +145,24 @@ def final_movement(kit, prompt, last_head_position, total_tokens):
     logging.info('Total tokens spent: '+str(total_tokens))
 
 
-def prompt_json(prompt):
+def prompt_json_short(prompt):
+    # find position of last {
+    last_bracket = prompt.rfind('{')
+    # remove all after last { including { and put to proto
+    proto = prompt[:last_bracket-1]
+    # find latest comma
+    last_comma = proto.rfind(',')
+    # remove last comma
+    proto = proto[:last_comma]
+    latest_phrase = 'Here are my latest interaction batches:'
+    # find the final position of the latest_phrase
+    latest_phrase_final_pos = proto.rfind(latest_phrase)+len(latest_phrase)
+    # remove all before the latest_phrase including the latest_phrase
+    proto = proto[latest_phrase_final_pos:]
+    return proto+'\n]'
+
+
+def prompt_json_full(prompt):
     latest_phrase = 'Here are my latest interaction batches:'
     # find the final position of the latest_phrase
     latest_phrase_final_pos = prompt.rfind(latest_phrase)+len(latest_phrase)
@@ -234,8 +251,12 @@ def main():
             logging.info('Tokens limit reached. Exit.')
             exit()
         logging.info('Prompt: **'+prompt+'**')
-        res = prompt_json(prompt)
-        answer = str(json.loads(res))
+        try:
+            res = prompt_json_full(prompt)
+            answer = str(json.loads(res))
+        except:
+            res = prompt_json_short(prompt)
+            answer = str(json.loads(res))
 
         # === Reaction: Move tracks
         move_tracks(pca, answer)
