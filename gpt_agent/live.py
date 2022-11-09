@@ -146,20 +146,19 @@ def final_movement(kit, prompt, last_head_position, total_tokens):
 
 
 def prompt_json(prompt):
-    # find position of last {
-    last_bracket = prompt.rfind('{')
-    # remove all after last { including { and put to proto
-    proto = prompt[:last_bracket-1]
-    # find latest comma
-    last_comma = proto.rfind(',')
-    # remove last comma
-    proto = proto[:last_comma]
     latest_phrase = 'Here are my latest interaction batches:'
     # find the final position of the latest_phrase
-    latest_phrase_final_pos = proto.rfind(latest_phrase)+len(latest_phrase)
+    latest_phrase_final_pos = prompt.rfind(latest_phrase)+len(latest_phrase)
     # remove all before the latest_phrase including the latest_phrase
-    proto = proto[latest_phrase_final_pos:]
-    return proto+'\n]'    
+    return prompt[latest_phrase_final_pos:]    
+
+
+def remove_closers(prompt):
+    # find position of last ]
+    last_bracket = prompt.rfind(']')
+    # remove all after last ] including ] and put to proto
+    proto = prompt[:last_bracket-1]
+    return proto
 
 
 def main():
@@ -226,10 +225,8 @@ def main():
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
-        # remove } from answer
-        answer = answer.replace('}', '')
-        # remove ] from answer
-        answer = answer.replace(']', '')
+        
+
         prompt = prompt + answer
         if total_tokens>30000:
             # if True:
@@ -245,6 +242,9 @@ def main():
 
         # === Reaction: Head direction
         last_head_position = move_head(kit, answer, last_head_position)
+
+        # === prepare log for continuation
+        prompt = remove_closers(prompt)+',\n    {'
 
         life_length -= 1
         logging.info(str(dt.now())+': Life length: '+str(life_length))
