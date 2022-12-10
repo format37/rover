@@ -265,13 +265,16 @@ def main():
         # logging.info('Prompt: **'+prompt+'**')
         # try:
         res = prompt_json_full(prompt)
-        answer = str(json.loads(res))
+        # answer = str(json.loads(res))
+
+        life_log_json = json.loads(res)
+        my_action = life_log_json[-1]['my_action']
 
         # === Reaction: Move tracks
-        move_tracks(pca, answer)
+        move_tracks(pca, my_action)
 
         # === Reaction: Head direction
-        last_head_position = move_head(kit, answer, last_head_position)
+        last_head_position = move_head(kit, my_action, last_head_position)
 
         # === prepare log for continuation
         prompt = remove_closers(prompt)+'\n},\n    {'
