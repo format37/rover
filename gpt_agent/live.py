@@ -244,7 +244,7 @@ def main():
         prompt = prompt + answer
         # === Action
         stop_words = ['"']
-        prompt += '",'+'\n'+'"my_action": ["'
+        prompt += '",'+'\n'+'"        my_action": ["'
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
         logging.info('Action openai answer: '+str(answer))
@@ -259,16 +259,9 @@ def main():
             logging.info('Tokens limit reached. Exit.')
             exit()
         logging.info('Prompt: **'+prompt+'**')
-        try:
-            res = prompt_json_full(prompt)
-            answer = str(json.loads(res))
-        except:
-            res = prompt_json_short(prompt)
-            answer = str(json.loads(res))
-
-        # logging.info('Final answer: '+answer)
-
-        # exit()
+        # try:
+        res = prompt_json_full(prompt)
+        answer = str(json.loads(res))
 
         # === Reaction: Move tracks
         move_tracks(pca, answer)
@@ -277,7 +270,7 @@ def main():
         last_head_position = move_head(kit, answer, last_head_position)
 
         # === prepare log for continuation
-        prompt = remove_closers(prompt)+',\n    {'
+        prompt = remove_closers(prompt)+'\n},\n    {'
 
         life_length -= 1
         logging.info(str(dt.now())+': Life length: '+str(life_length))
