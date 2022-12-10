@@ -116,6 +116,7 @@ def set_track(pca, track, speed, direction):
 def move_tracks(pca, answer):
     default_speed = 0.07
     delay = 4
+    logging.info('Move tracks cmd: '+answer)
     if 'move ahead' in answer:
         # tracks go front
         set_track(pca, track = 0, speed = default_speed, direction = 0)
@@ -261,7 +262,7 @@ def main():
             final_movement(kit, prompt, last_head_position, total_tokens)
             logging.info('Tokens limit reached. Exit.')
             exit()
-        logging.info('Prompt: **'+prompt+'**')
+        # logging.info('Prompt: **'+prompt+'**')
         # try:
         res = prompt_json_full(prompt)
         answer = str(json.loads(res))
