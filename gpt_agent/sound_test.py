@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 # Recording
 # arecord -D plughw:2,0 -f S16_LE -r 48000 -c 2 test.wav
-logger.info('Recording...')
-os.system('arecord test.wav -device=plughw:CARD=Device,DEV=0 -f S16_LE -r 48000 -c 2 --duration=5')
+logger.info('Recording 5 seconds...')
+os.system('arecord test.wav --device=plughw:CARD=Device,DEV=0 -f S16_LE -r 48000 -c 2 --duration=5')
 
 # Playing
 logger.info('Playing')
