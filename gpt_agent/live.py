@@ -268,7 +268,7 @@ def main():
         # answer = str(json.loads(res))
 
         life_log_json = json.loads(res)
-        my_action = life_log_json[-1]['my_action']
+        my_action = str(life_log_json[-1]['my_action'])
 
         # === Reaction: Move tracks
         move_tracks(pca, my_action)
