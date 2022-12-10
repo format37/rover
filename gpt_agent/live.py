@@ -248,7 +248,7 @@ def main():
         prompt = prompt + answer
         # === Action
         stop_words = ['"']
-        prompt += '",'+'\n'+'"        my_action": ["'
+        prompt += '",'+'\n'+'        "my_action": ["'
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
         logging.info('Action openai answer: '+str(answer))
