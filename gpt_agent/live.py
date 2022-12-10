@@ -235,21 +235,21 @@ def main():
         stop_words = ['"']
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        logging.info('Think openai answer: ['+str(answer)+']')
+        logging.info('Think openai answer: '+str(answer))
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
         # === Action
         stop_words = ['"']
-        prompt += '",'+'\n'+'"my_action": "'
+        prompt += '",'+'\n'+'"my_action": ["'
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        logging.info('Action openai answer: ['+str(answer)+']')
+        logging.info('Action openai answer: '+str(answer))
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
-        prompt = prompt + answer
+        prompt = prompt + answer + '"],'
 
         if total_tokens>30000:
             # if True:
@@ -264,9 +264,9 @@ def main():
             res = prompt_json_short(prompt)
             answer = str(json.loads(res))
 
-        logging.info('Final answer: '+answer)
+        # logging.info('Final answer: '+answer)
 
-        exit()
+        # exit()
 
         # === Reaction: Move tracks
         move_tracks(pca, answer)
