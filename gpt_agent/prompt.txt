@@ -9,15 +9,17 @@ And so on, again, endlessly ..
 I am trying to avoid obstructions.
 The log file is strictly sequential. After each of My actions, I always see something and tell my thoughs.
 My available actions strictly are:
-[turn left]
-[turn right]
-[move ahead]
-[move backward]
-[look left]
-[look right]
-[look ahead]
+[
+    ["turn left"],
+    ["turn right"],
+    ["move ahead"],
+    ["move backward"],
+    ["look left"],
+    ["look right"],
+    ["look ahead"]
+]
 Any other actions are not supported.
-Here are my latest interaction batches:
+Here are my latest interaction batches in machine readable json format:
 
 [
     {
