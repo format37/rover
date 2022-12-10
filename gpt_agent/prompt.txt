@@ -26,12 +26,14 @@ Here are my latest interaction batches in machine readable json format:
         "see": "Everything blurred, as if in a fog.",
         "obstruction_distance": 327,
         "my_thoughs": "Let's see what I can find out about his place.",
+        "my_speech": "Hey, is anybody there?",
         "my_action": ["move left"]
     },
     {
         "see": "Dark space.",
         "obstruction_distance": 319,
         "my_thoughs": "I hope to find something soon.",
+        "my_speech": "",
         "my_action": ["look ahead"]
     },
     {

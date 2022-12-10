@@ -236,6 +236,7 @@ def main():
         prompt += '\n'+'        "see": "'+description+'",'
         logging.info('== obstruction distance: '+str(obstruction_distance))
         prompt += '\n'+'        "obstruction_distance": '+str(obstruction_distance)+','
+        
         # === Think
         prompt += '\n'+'        "my_thoughs": "'
         stop_words = ['"']
@@ -246,6 +247,18 @@ def main():
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
+
+        # === Speech
+        prompt += '\n'+'        "my_speech": "'
+        stop_words = ['"']
+        davinchi_response = text_davinci(str(prompt), stop_words)
+        answer = davinchi_response['choices'][0]['text']
+        logging.info('Think openai answer: '+str(answer))
+        tokens_spent = int(davinchi_response['usage']['total_tokens'])
+        total_tokens += tokens_spent
+        logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
+        prompt = prompt + answer
+        
         # === Action
         stop_words = ['"']
         prompt += '",'+'\n'+'        "my_action": ["'
