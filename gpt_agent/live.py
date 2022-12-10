@@ -185,7 +185,7 @@ def remove_closers(prompt):
 
 
 def main():
-    life_length = 4
+    life_length = 5
     total_tokens = 0
 
     # read prompt from json file
