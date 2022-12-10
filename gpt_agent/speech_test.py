@@ -19,7 +19,7 @@ def tts(tts_text, filename):
     data = {
         'text':tts_text,
         'language':'en-US',
-        'model':'en-US-Neural2-F',
+        'model':'en-US-Neural2-I',
         'speed':1
     }
     response = requests.post(tts_server+'/inference', json=data)
@@ -34,7 +34,7 @@ def main():
     # Transcribe
     tts('Hi, glad to meet you', filename)
     # Convert
-    os.system('ffmpeg -i '+filename+' -ar 48000 -ab 768k '+filename)
+    os.system('ffmpeg -y -i '+filename+' -ar 48000 -ab 768k '+filename)
     # Play
     os.system('aplay '+filename+' --device=plughw:CARD=Device,DEV=0')
 
