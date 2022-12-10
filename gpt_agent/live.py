@@ -249,7 +249,7 @@ def main():
         prompt = prompt + answer
 
         # === Speech
-        prompt += '\n'+'        "my_speech": "'
+        prompt += '",'+'\n'+'        "my_speech": "'
         stop_words = ['"']
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
