@@ -159,7 +159,7 @@ def prompt_json_short(prompt):
     latest_phrase_final_pos = proto.rfind(latest_phrase)+len(latest_phrase)
     # remove all before the latest_phrase including the latest_phrase
     proto = proto[latest_phrase_final_pos:]
-    logging.info('Proto JSON: '+str(+'\n]'))
+    logging.info('Proto JSON: '+str(proto+'\n]'))
     return proto+'\n]'
 
 
