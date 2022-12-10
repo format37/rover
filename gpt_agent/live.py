@@ -154,11 +154,12 @@ def prompt_json_short(prompt):
     last_comma = proto.rfind(',')
     # remove last comma
     proto = proto[:last_comma]
-    latest_phrase = 'Here are my latest interaction batches:'
+    latest_phrase = 'Here are my latest interaction batches in machine readable json format:'
     # find the final position of the latest_phrase
     latest_phrase_final_pos = proto.rfind(latest_phrase)+len(latest_phrase)
     # remove all before the latest_phrase including the latest_phrase
     proto = proto[latest_phrase_final_pos:]
+    logging.info('Proto JSON: '+str(+'\n]'))
     return proto+'\n]'
 
 
