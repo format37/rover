@@ -231,21 +231,21 @@ def main():
         logging.info('== obstruction distance: '+str(obstruction_distance))
         prompt += '\n'+'        "obstruction_distance": '+str(obstruction_distance)+','
         # === Think
-        prompt += '\n'+'        "my_thoughs": '
+        prompt += '\n'+'        "my_thoughs": "'
         stop_words = ['"']
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        logging.info('Openai answer: ['+str(answer)+']')
+        logging.info('Think openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
         # === Action
-        stop_words = [']']
-        prompt += '",'+'\n'+'"my_action": '
+        stop_words = ['"']
+        prompt += '",'+'\n'+'"my_action": "'
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        logging.info('Openai answer: ['+str(answer)+']')
+        logging.info('Action openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')

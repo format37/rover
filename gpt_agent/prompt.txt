@@ -26,7 +26,7 @@ Here are my latest interaction batches in machine readable json format:
         "see": "Everything blurred, as if in a fog.",
         "obstruction_distance": 327,
         "my_thoughs": "Let's see what I can find out about his place.",
-        "my_action": ["move backward", "look left"]
+        "my_action": ["move left"]
     },
     {
         "see": "Dark space.",
