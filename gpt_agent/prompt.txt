@@ -22,13 +22,13 @@ Here are my latest interaction batches:
 [
     {
         "see": "Everything blurred, as if in a fog.",
-        "obstruction_distance": 527,
+        "obstruction_distance": 327,
         "my_thoughs": "Let's see what I can find out about his place.",
         "my_action": ["move backward", "look left"]
     },
     {
         "see": "Dark space.",
-        "obstruction_distance": 519,
+        "obstruction_distance": 319,
         "my_thoughs": "I hope to find something soon.",
         "my_action": ["look ahead"]
     },

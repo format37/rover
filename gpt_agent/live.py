@@ -187,7 +187,7 @@ def main():
         config = json.load(f)
         prompt_file = config['prompt_file']
         # stop_words = config['stop_words']
-        stop_words = ['"see":']
+        stop_words = ['"']
     with open(prompt_file, 'r') as f:
         prompt = f.read()
 
@@ -231,21 +231,26 @@ def main():
         logging.info('== obstruction distance: '+str(obstruction_distance))
         prompt += '\n'+'        "obstruction_distance": '+str(obstruction_distance)+','
         # === Think
-        prompt += '\n'+'        "my_thoughs":'
-
-        # === Thinking about reaction
+        prompt += '\n'+'        "my_thoughs": "'
+        stop_words = ['"']
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        # Replace the latest ] if it is the last symbol in the prompt
-        # if prompt[-1]==']':
-        #     prompt = prompt[:-1]
         logging.info('Openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
-        
-
         prompt = prompt + answer
+        # === Action
+        stop_words = [']']
+        prompt += '",'+'\n'+'"my_action": ["'
+        davinchi_response = text_davinci(str(prompt), stop_words)
+        answer = davinchi_response['choices'][0]['text']
+        logging.info('Openai answer: ['+str(answer)+']')
+        tokens_spent = int(davinchi_response['usage']['total_tokens'])
+        total_tokens += tokens_spent
+        logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
+        prompt = prompt + answer
+
         if total_tokens>30000:
             # if True:
             final_movement(kit, prompt, last_head_position, total_tokens)
@@ -258,6 +263,10 @@ def main():
         except:
             res = prompt_json_short(prompt)
             answer = str(json.loads(res))
+
+        logging.info('Final answer: '+answer)
+
+        exit()
 
         # === Reaction: Move tracks
         move_tracks(pca, answer)
