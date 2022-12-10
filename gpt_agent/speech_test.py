@@ -23,6 +23,7 @@ def tts(tts_text, filename):
         'speed':1
     }
     response = requests.post(tts_server+'/inference', json=data)
+    logger.info('Response: '+str(response.status_code))
     # Save response as audio file
     with open(filename, "wb") as f:
         f.write(response.content)
@@ -31,7 +32,9 @@ def tts(tts_text, filename):
 def main():
     filename = 'test.wav'
     # Transcribe
-    tts('Hello world', filename)
+    tts('Hi, glad to meet you', filename)
+    # Convert
+    os.system('ffmpeg -i '+filename+' -ar 48000 -ab 768k '+filename)
     # Play
     os.system('aplay '+filename+' --device=plughw:CARD=Device,DEV=0')
 
