@@ -5,7 +5,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def tts(tts_text, filename):
+def tts(tts_text, filename='tts.wav'):
     # Read settings
     with open('settings.json') as f:
         settings = json.load(f)
@@ -28,15 +28,15 @@ def tts(tts_text, filename):
     with open(filename, "wb") as f:
         f.write(response.content)
     logger.info('File saved: '+filename)
-
-def main():
-    filename = 'test.wav'
-    # Transcribe
-    tts('Hi, glad to meet you', filename)
     # Convert
     os.system('ffmpeg -y -i '+filename+' -ar 48000 -ab 768k '+filename)
     # Play
     os.system('aplay '+filename+' --device=plughw:CARD=Device,DEV=0')
+
+
+def main():
+    # Transcribe
+    tts('Hi, glad to meet you')
 
 
 if __name__ == '__main__':

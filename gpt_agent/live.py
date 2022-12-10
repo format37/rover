@@ -12,8 +12,8 @@ from adafruit_servokit import ServoKit
 from board import SCL, SDA
 import busio
 from adafruit_pca9685 import PCA9685
-# cv2 imports
 import cv2
+import os
 
 
 # enable logging
@@ -184,6 +184,32 @@ def remove_closers(prompt):
     return proto
 
 
+def tts(tts_text, filename='tts.wav'):
+    # Read settings
+    with open('settings.json') as f:
+        settings = json.load(f)
+        tts_server = settings['tts_server']
+    # https://cloud.google.com/text-to-speech/docs/voices
+    # https://cloud.google.com/text-to-speech
+    logging.info('tts: '+tts_text)
+    data = {
+        'text':tts_text,
+        'language':'en-US',
+        'model':'en-US-Neural2-I',
+        'speed':1
+    }
+    response = requests.post(tts_server+'/inference', json=data)
+    logging.info('Response: '+str(response.status_code))
+    # Save response as audio file
+    with open(filename, "wb") as f:
+        f.write(response.content)
+    logging.info('File saved: '+filename)
+    # Convert
+    os.system('ffmpeg -y -i '+filename+' -ar 48000 -ab 768k '+filename)
+    # Play
+    os.system('aplay '+filename+' --device=plughw:CARD=Device,DEV=0')
+
+
 def main():
     life_length = 5
     total_tokens = 0
@@ -258,6 +284,8 @@ def main():
         total_tokens += tokens_spent
         logging.info('Tokens spent: <<=[ '+str(tokens_spent)+' ]==>>')
         prompt = prompt + answer
+        if len(str(answer).replace('"','')):
+            tts(answer)
         
         # === Action
         stop_words = ['"']

@@ -3,10 +3,7 @@ My available actions strictly are:
     ["turn left"],
     ["turn right"],
     ["move ahead"],
-    ["move backward"],
-    ["look left"],
-    ["look right"],
-    ["look ahead"]
+    ["move backward"]
 ]
 Any other actions are not supported.
 Here are my latest interaction batches in machine readable json format:
