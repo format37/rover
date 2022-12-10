@@ -163,11 +163,12 @@ def prompt_json_short(prompt):
 
 
 def prompt_json_full(prompt):
-    latest_phrase = 'Here are my latest interaction batches:'
+    latest_phrase = 'Here are my latest interaction batches in machine readable json format:'
     # find the final position of the latest_phrase
     latest_phrase_final_pos = prompt.rfind(latest_phrase)+len(latest_phrase)
     # remove all before the latest_phrase including the latest_phrase
-    return prompt[latest_phrase_final_pos:]    
+    logging.info('Prompt JSON: '+str(prompt[latest_phrase_final_pos:]))
+    return prompt[latest_phrase_final_pos:]
 
 
 def remove_closers(prompt):
