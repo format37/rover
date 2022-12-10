@@ -79,13 +79,16 @@ def move_head(kit, answer, last_head_position):
     logging.info('Move head cmd: '+answer)
     if 'look ahead' in answer:
         new_head_position = 90
+        logging.info('HEAD: Looking ahead.')
     elif 'look left' in answer:
         new_head_position = 180
+        logging.info('HEAD: Looking left.')
     elif 'look right' in answer:
         new_head_position = 0
+        logging.info('HEAD: Looking right.')
     else:
-        logging.info('No head movement. Looking ahead.')
         new_head_position = 90
+        logging.info('HEAD: No head movement. Looking ahead.')
 
     min_pos = min(last_head_position, new_head_position)
     max_pos = max(last_head_position, new_head_position)
@@ -181,7 +184,7 @@ def remove_closers(prompt):
 
 
 def main():
-    life_length = 3
+    life_length = 4
     total_tokens = 0
 
     # read prompt from json file
