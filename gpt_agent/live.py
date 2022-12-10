@@ -29,7 +29,7 @@ def text_davinci(prompt, stop_words):
 
     openai.api_key = token
     return json.loads(str(openai.Completion.create(
-      engine="text-davinci-002",
+      engine="text-davinci-003",
       prompt=prompt,
       temperature=0.8,
       max_tokens=60,
@@ -236,8 +236,9 @@ def main():
         # === Thinking about reaction
         davinchi_response = text_davinci(str(prompt), stop_words)
         answer = davinchi_response['choices'][0]['text']
-        # replace the '\n' symbol
-        # answer = answer.replace('\n', '')
+        # Replace the latest ] if it is the last symbol in the prompt
+        # if prompt[-1]==']':
+        #     prompt = prompt[:-1]
         logging.info('Openai answer: ['+str(answer)+']')
         tokens_spent = int(davinchi_response['usage']['total_tokens'])
         total_tokens += tokens_spent
