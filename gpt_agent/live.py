@@ -211,7 +211,7 @@ def tts(tts_text, filename='tts.wav'):
 
 
 def main():
-    life_length = 5
+    life_length = 10
     total_tokens = 0
 
     # read prompt from json file
