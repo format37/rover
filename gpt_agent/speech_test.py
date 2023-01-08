@@ -12,7 +12,7 @@ def tts(tts_text, filename='tts.wav'):
         tts_server = settings['tts_server']
     # https://cloud.google.com/text-to-speech/docs/voices
     # https://cloud.google.com/text-to-speech
-    logging.info('tts: '+tts_text)
+    logger.info('tts: '+tts_text)
     data = {
         'text':tts_text,
         'language':'en-US',
@@ -20,11 +20,11 @@ def tts(tts_text, filename='tts.wav'):
         'speed':1
     }
     response = requests.post(tts_server+'/inference', json=data)
-    logging.info('Response: '+str(response.status_code))
+    logger.info('Response: '+str(response.status_code))
     # Save response as audio file
     with open(filename, "wb") as f:
         f.write(response.content)
-    logging.info('File saved: '+filename)
+    logger.info('File saved: '+filename)
     # Convert
     os.system('ffmpeg -y -i '+filename+' -ar 48000 -ab 768k '+filename)
     # Play
