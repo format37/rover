@@ -249,7 +249,11 @@ def main():
         logging.info('Obstruction distance: '+str(obstruction_distance))
 
         # === Describe the world
-        url = 'http://192.168.1.102:20000/request'
+        # Read settings
+        with open('settings.json') as f:
+            settings = json.load(f)
+            image2text_server = settings['image2text_server']
+        url = image2text_server+'/request'
         files = {'file': open(path, 'rb')}
         r = requests.post(url, files=files)
         description = json.loads(r.text)['description']
