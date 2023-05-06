@@ -3,6 +3,10 @@ The core concept revolves around infinite, sequential JSON prompting that can ge
 <p align="center">
   <img src="https://github.com/format37/rover/blob/master/assets/rover.drawio.png" alt="Concept">
 </p>
+<b>Status</b>
+Prototyping
+<b>Hardware</b>
+Jetson Nano 4GB
 <hr>
 <b>Previous revisions</b>
 <p align="center">
