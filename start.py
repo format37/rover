@@ -64,7 +64,6 @@ def main():
         # with open(path, "rb") as image_file:
         #     base64_image = base64.b64encode(image_file.read()).decode('utf-8')
         base64_image = cv2.imencode('.jpg', color_image)[1].tostring()
-        logging.info('Uploading image to MiniGPT-4...')
         payload = {
                 "data": [
                     f"data:image/jpeg;base64,{base64_image}",
@@ -72,7 +71,9 @@ def main():
                     None
                 ]
             }
-        response = requests.post(minigpt4_server + "run/upload_image", json=payload)
+        url = minigpt4_server + "run/upload_image"
+        logging.info(str(url)+' Uploading image to MiniGPT-4: '+str(payload))
+        response = requests.post(url, json=payload)
         data = response.json()["data"]
         logging.info('Sending prompt to MiniGPT-4...')
         response = requests.post(minigpt4_server + "run/ask_question", json={
