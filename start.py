@@ -21,6 +21,7 @@ def main():
     life_length = 1
 
     # Tracks init
+    logging.info('Init tracks')
     i2c_bus = busio.I2C(SCL, SDA)
     pca = [
         PCA9685(i2c_bus,address=0x40),
@@ -28,6 +29,7 @@ def main():
         ]
 
     # Head servo
+    logging.info('Init head servo')
     kit = ServoKit(channels=16, address=0x42)
     last_head_position = 90
 
@@ -38,10 +40,12 @@ def main():
     # Read settings
     with open('settings.json') as f:
         settings = json.load(f)
-        minigpt4_server = settings['image2text_server'] + '/'
+        minigpt4_server = settings['minigpt4_server'] + '/'
 
+    logging.info('Starting rover life...')
     while life_length>0:
         # === See: Look to the world
+        logging.info('Capturing RGB image...')
         color_image = camera_capture_single_nondepth_image()
         # normalize image to overcome low light
         color_image = cv2.normalize(color_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
@@ -51,6 +55,7 @@ def main():
         # img.save(path)
         
         # === Obstruction distance
+        logging.info('Calculating obstruction distance...')
         obstruction_distance = realsense_depth_median()
         obstruction_distance = round(obstruction_distance, 2)
         logging.info('Obstruction distance: '+str(obstruction_distance))
