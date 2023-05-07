@@ -13,6 +13,7 @@ from rover import (
 )
 from PIL import Image
 import base64
+from datetime import datetime as dt
 
 
 def main():
@@ -163,8 +164,9 @@ def main():
         # === prepare log for continuation
         prompt = remove_closers(prompt)+'\n},\n    {'
 
+        """
         life_length -= 1
-        logging.info(str(dt.now())+': Life length: '+str(life_length))"""
+        logging.info(str(dt.now())+': Life length: '+str(life_length))
     # final_movement(kit, prompt, last_head_position, total_tokens)
 
 
