@@ -12,6 +12,7 @@ from rover import (
     extract_answer
 )
 from PIL import Image
+import base64
 
 
 def main():
