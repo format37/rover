@@ -28,6 +28,7 @@ Represent your answer in JSON format:
     "my_speech": "",
     "my_actions": [""]
 }
+You can do a list of actions.
 You are in the robot body, which is available only actions from the list below:
 ["move left", "move right", "move ahead", "move back", "look left", "look right"]
 Don't use any other actions.
