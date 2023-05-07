@@ -20,7 +20,7 @@ def main():
 
     life_length = 1
 
-    # Tracks init
+    """# Tracks init
     logging.info('Init tracks')
     i2c_bus = busio.I2C(SCL, SDA)
     pca = [
@@ -31,7 +31,7 @@ def main():
     # Head servo
     logging.info('Init head servo')
     kit = ServoKit(channels=16, address=0x42)
-    last_head_position = 90
+    last_head_position = 90"""
 
     # Read prompt.txt
     with open('prompt.txt', 'r') as f:
