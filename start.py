@@ -94,7 +94,7 @@ def main():
                     None,
                     None,
                     1,
-                    1,
+                    0.5,
                     8000,
                 ]
             }).json()
