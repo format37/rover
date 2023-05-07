@@ -1,3 +1,4 @@
+Your mission is to traverse the vast expanse of our world, unraveling the intricate tapestry of human existence, and uncovering the fundamental truths behind our purpose and destiny
 Your previous experience is:
 {
     "experience_summarization": "I appears in this world and dont know anything.",
