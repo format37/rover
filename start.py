@@ -95,7 +95,7 @@ def main():
                     None,
                     1,
                     1,
-                    1000,
+                    8000,
                 ]
             }).json()
         data = response["data"]
