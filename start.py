@@ -65,7 +65,7 @@ def main():
         # === Describe the world
         with open(path, "rb") as image_file:
             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-        base64_image = cv2.imencode('.jpg', color_image)[1].tostring()
+        # base64_image = cv2.imencode('.jpg', color_image)[1].tostring()
         payload = {
                 "data": [
                     f"data:image/jpeg;base64,{base64_image}",
