@@ -11,6 +11,7 @@ from rover import (
     realsense_depth_median,
     extract_answer
 )
+from PIL import Image
 
 
 def main():
@@ -50,9 +51,9 @@ def main():
         # normalize image to overcome low light
         color_image = cv2.normalize(color_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         # convert to jpeg
-        # img = Image.fromarray(color_image, 'RGB')
-        # path = 'color.jpg'
-        # img.save(path)
+        img = Image.fromarray(color_image, 'RGB')
+        path = 'color.jpg'
+        img.save(path)
         
         # === Obstruction distance
         logging.info('Calculating obstruction distance...')
@@ -61,8 +62,8 @@ def main():
         logging.info('Obstruction distance: '+str(obstruction_distance))
         
         # === Describe the world
-        # with open(path, "rb") as image_file:
-        #     base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+        with open(path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
         base64_image = cv2.imencode('.jpg', color_image)[1].tostring()
         payload = {
                 "data": [
@@ -72,7 +73,7 @@ def main():
                 ]
             }
         url = minigpt4_server + "run/upload_image"
-        logging.info(str(url)+' Uploading image to MiniGPT-4: '+str(payload))
+        logging.info(' Uploading image to MiniGPT-4: '+str(url))
         response = requests.post(url, json=payload)
         data = response.json()["data"]
         logging.info('Sending prompt to MiniGPT-4...')
