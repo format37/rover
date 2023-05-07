@@ -6,7 +6,7 @@ Your previous experience is:
     "obstruction_distance": 327,
     "my_thoughs": "Let's see what I can find out about his place.",
     "my_speech": "Hey, is anybody there?",
-    "my_action": ["move left"]
+    "my_actions": ["move left"]
 },
 {
     "experience_summarization": "I moved left and tried to figure out where I am.",
@@ -14,7 +14,7 @@ Your previous experience is:
     "obstruction_distance": 319,
     "my_thoughs": "I hope to find something soon.",
     "my_speech": "",
-    "my_action": ["look ahead"]
+    "my_actions": ["look ahead"]
 }
 
 Current obstruction_distance is 418
@@ -26,7 +26,7 @@ Represent your answer in JSON format:
     "obstruction_distance": ,
     "my_thoughs": "",
     "my_speech": "",
-    "my_action": [""]
+    "my_actions": [""]
 }
 You are in the robot body, which is available only actions from the list below:
 ["move left", "move right", "move ahead", "move back", "look left", "look right"]
