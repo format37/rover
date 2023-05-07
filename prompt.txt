@@ -20,7 +20,7 @@ Current obstruction_distance is 418
 Please, provide your next batch, including what you see, your thoughts, speech, and actions.
 Use only strictly actions from the list below:
 ["move left", "move right", "move ahead", "move back", "look left", "look right"]
-Don't look ahead. It's not allowed.
+Don't look ahead and don't look around. It's not allowed.
 Represent your answer in JSON format:
 {
     "experience_summarization": "",
