@@ -3,6 +3,8 @@ The core concept revolves around infinite, sequential JSON prompting that can ge
 <p align="center">
   <img src="https://github.com/format37/rover/blob/master/assets/rover.drawio.png" alt="Concept">
 </p><br>
+<b>Requirements</b><br>
+* <a href="https://github.com/format37/MiniGPT-4">MiniGPT-4</a><br>
 <b>Status</b><br>
 Prototyping<br><br>
 <b>Hardware</b><br>
@@ -10,7 +12,7 @@ Jetson Nano 4GB<br>
 <hr>
 <b>Previous revisions</b>
 <p align="center">
-  <a href="https://youtu.be/f6Nfc5jzEi0">
+  <a href="https://youtu.be/f6Nfc5jzEi0">YouTube</a>
     <img src="https://i9.ytimg.com/vi/f6Nfc5jzEi0/mq1.jpg?sqp=CMjwnYoG&rs=AOn4CLCXwUplQjQcZZcBIdK3yu3a80Qf7w" alt="Realsense tank async depth capture python">
   </a>
 </p>

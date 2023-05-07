@@ -1,0 +1,32 @@
+Your previous experience is:
+{
+    "experience_summarization": "I appears in this world and dont know anything.",
+    "see": "Everything blurred, as if in a fog.",
+    "obstruction_distance": 327,
+    "my_thoughs": "Let's see what I can find out about his place.",
+    "my_speech": "Hey, is anybody there?",
+    "my_action": ["move left"]
+},
+{
+    "experience_summarization": "I moved left and tried to figure out where I am.",
+    "see": "Dark space.",
+    "obstruction_distance": 319,
+    "my_thoughs": "I hope to find something soon.",
+    "my_speech": "",
+    "my_action": ["look ahead"]
+}
+
+Current obstruction_distance is 418
+Please, provide your next batch, including what you see, your thoughts, speech, and actions.
+Use only strictly actions from the list below:
+["move left", "move right", "move ahead", "move back", "look left", "look right"]
+Don't look ahead. It's not allowed.
+Represent your answer in JSON format:
+{
+    "experience_summarization": "",
+    "see": "",
+    "obstruction_distance": ,
+    "my_thoughs": "",
+    "my_speech": "",
+    "my_action": [""]
+}
