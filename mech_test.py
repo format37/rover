@@ -39,15 +39,16 @@ def main():
 	#	pca[i].channels[1].duty_cycle = 0xffff
 
 	# servo init
+	logging.info('Init servo')
 	kit = ServoKit(channels=16, address=0x42)
 
-	print('start')
-
 	# tracks go cw
-	set(track = 0, speed = default_speed, direction = 1)
-	set(track = 1, speed = default_speed, direction = 1)
+	logging.info('tracks go left')
+	set(pca, track = 0, speed = default_speed, direction = 1)
+	set(pca, track = 1, speed = default_speed, direction = 1)
 
 	# head
+	logging.info('head left')
 	delay = 0.02
 	# kit = ServoKit(channels=16, address=0x42)
 	for i in range(90,180):
@@ -55,25 +56,32 @@ def main():
 		time.sleep(delay)
 
 	# tracks go ocw
+	logging.info('tracks go right')
 	set(pca, track = 0, speed = default_speed, direction = 0)
 	set(pca, track = 1, speed = default_speed, direction = 0)
 
+	# servo
+	logging.info('head right')
 	for i in range(0,180):
 			kit.servo[0].angle = 180-i
 			time.sleep(delay)
 
 	# tracks go front
+	logging.info('tracks go front')
 	set(pca, track = 0, speed = default_speed, direction = 0)
 	set(pca, track = 1, speed = default_speed, direction = 1)
 
+	# servo
+	logging.info('head front')
 	for i in range(0,90):
 			kit.servo[0].angle = i
 			time.sleep(delay)
 
 	# tracks stop
+	logging.info('tracks stop')
 	set(pca, track = 0, speed = 0, direction = 1)
 	set(pca, track = 1, speed = 0, direction = 1)
-	print('stop')
+	logging.info('done')
 
 
 if __name__ == '__main__':
