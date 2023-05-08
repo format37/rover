@@ -100,7 +100,11 @@ def main():
             }).json()
         data = response["data"]
         reaction = extract_answer(data)
+        reaction = reaction.replace('<br>','\n')
         logging.info('MiniGPT-4 answer: '+str(reaction))
+        # actions = 
+
+        
         
         """logging.info('== see: '+description)
         prompt += '\n'+'        "see": "'+description+'",'
