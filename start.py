@@ -60,10 +60,20 @@ def main():
         img.save(path)
         
         # === Obstruction distance
+        prompt = prompt.replace(str(obstruction_distance), "418")
         logging.info('Calculating obstruction distance...')
         obstruction_distance = realsense_depth_median()
         obstruction_distance = round(obstruction_distance, 2)
         logging.info('Obstruction distance: '+str(obstruction_distance))
+        prompt = prompt.replace("418", str(obstruction_distance))
+
+
+        # === Move head
+        if last_head_position != 90:
+            logging.info('Photo capturing done. Return head to center')
+            last_head_position = move_head(kit, 'photo ahead', last_head_position)
+        else:
+            logging.info('Actions done.')
         
         # === Describe the world
         with open(path, "rb") as image_file:
@@ -121,13 +131,6 @@ def main():
                 last_head_position = move_head(kit, action, last_head_position)
             else:
                 logging.info('Action not recognized: '+str(action))
-
-        if last_head_position != 90:
-            logging.info('Actions done. Return head to center')
-            last_head_position = move_head(kit, 90, last_head_position)
-        else:
-            logging.info('Actions done.')
-        
         
         """logging.info('== see: '+description)
         prompt += '\n'+'        "see": "'+description+'",'
