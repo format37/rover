@@ -198,7 +198,13 @@ def main():
         """
         life_length -= 1
         logging.info(str(dt.now())+': Life length: '+str(life_length))
-    # final_movement(kit, prompt, last_head_position, total_tokens)
+    
+    # === Final head movement
+    if last_head_position != 90:
+        logging.info('Done. Return head to center')
+        last_head_position = move_head(kit, 'photo ahead', last_head_position)
+    else:
+        logging.info('Done.')
 
 
 if __name__ == '__main__':
