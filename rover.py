@@ -45,13 +45,13 @@ def realsense_depth_median():
 def move_head(kit, answer, last_head_position):
     head_delay = 0.01
     logging.info('Move head cmd: '+answer)
-    if 'look ahead' in answer:
+    if 'photo ahead' in answer:
         new_head_position = 90
         logging.info('HEAD: Looking ahead.')
-    elif 'look left' in answer:
+    elif 'photo left' in answer:
         new_head_position = 180
         logging.info('HEAD: Looking left.')
-    elif 'look right' in answer:
+    elif 'photo right' in answer:
         new_head_position = 0
         logging.info('HEAD: Looking right.')
     else:
