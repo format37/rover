@@ -14,7 +14,7 @@ Your previous experience is:
     "obstruction_distance": 319,
     "my_thoughs": "I hope to find something soon.",
     "my_speech": "",
-    "my_actions": ["move left", "move ahead", "photo ahead"]
+    "my_actions": ["move left", "move ahead"]
 }
 
 Current obstruction_distance is 418
