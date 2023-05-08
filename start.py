@@ -107,17 +107,20 @@ def main():
         try:
             reaction = json.loads(reaction)
             actions = reaction['my_actions']
+            logging.info('MiniGPT-4 actions: '+str(actions))
         except Exception as e:
             logging.info('MiniGPT-4 answer is not a json: '+str(e))
             # reaction = 'Nothing'
             actions = []
         
         for action in actions:
-            if action in ['move_forward','move_backward','turn_left','turn_right']:
+            if action in ['move ahead','move backward','move left','move right']:
                 logging.info('Action: '+str(action))
                 move_tracks(pca, action)
-            if action in ['photo left','photo right','photo ahead']:
+            elif action in ['photo left','photo right','photo ahead']:
                 last_head_position = move_head(kit, action, last_head_position)
+            else:
+                logging.info('Action not recognized: '+str(action))
 
         if last_head_position != 90:
             logging.info('Actions done. Return head to center')
