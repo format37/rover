@@ -41,6 +41,7 @@ def main():
     # Read prompt.txt
     with open('prompt.txt', 'r') as f:
         prompt = f.read()
+    obstruction_distance = 418
 
     # Read settings
     with open('settings.json') as f:
