@@ -106,7 +106,7 @@ def main():
         logging.info('MiniGPT-4 answer: '+str(reaction))
         try:
             reaction = json.loads(reaction)
-            actions = data['my_actions']
+            actions = reaction['my_actions']
         except Exception as e:
             logging.info('MiniGPT-4 answer is not a json: '+str(e))
             # reaction = 'Nothing'
