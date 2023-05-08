@@ -102,7 +102,7 @@ def main():
             }).json()
         data = response["data"]
         reaction = extract_answer(data)
-        reaction = reaction.replace('<br>','')
+        reaction = reaction.replace('<br>','').replace('“','"')
         logging.info('MiniGPT-4 answer: '+str(reaction))
         try:
             reaction = json.loads(reaction)
@@ -117,7 +117,7 @@ def main():
                 logging.info('Action: '+str(action))
                 move_tracks(pca, action)
             if action in ['photo left','photo right','photo ahead']:
-                last_head_position = move_head(kit, my_action, last_head_position)
+                last_head_position = move_head(kit, action, last_head_position)
 
         if last_head_position != 90:
             logging.info('Actions done. Return head to center')
