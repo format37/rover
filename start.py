@@ -9,7 +9,9 @@ import cv2
 from rover import (
     camera_capture_single_nondepth_image,
     realsense_depth_median,
-    extract_answer
+    extract_answer,
+    move_head,
+    move_tracks
 )
 from PIL import Image
 import base64
@@ -21,9 +23,9 @@ def main():
     # enable logging
     logging.basicConfig(level=logging.INFO)
 
-    life_length = 1
+    life_length = 2
 
-    """# Tracks init
+    # Tracks init
     logging.info('Init tracks')
     i2c_bus = busio.I2C(SCL, SDA)
     pca = [
@@ -34,7 +36,7 @@ def main():
     # Head servo
     logging.info('Init head servo')
     kit = ServoKit(channels=16, address=0x42)
-    last_head_position = 90"""
+    last_head_position = 90
 
     # Read prompt.txt
     with open('prompt.txt', 'r') as f:
@@ -102,8 +104,26 @@ def main():
         reaction = extract_answer(data)
         reaction = reaction.replace('<br>','')
         logging.info('MiniGPT-4 answer: '+str(reaction))
-        # actions = 
+        try:
+            reaction = json.loads(reaction)
+            actions = data['my_actions']
+        except Exception as e:
+            logging.info('MiniGPT-4 answer is not a json: '+str(e))
+            # reaction = 'Nothing'
+            actions = []
+        
+        for action in actions:
+            if action in ['move_forward','move_backward','turn_left','turn_right']:
+                logging.info('Action: '+str(action))
+                move_tracks(pca, action)
+            if action in ['photo left','photo right','photo ahead']:
+                last_head_position = move_head(kit, my_action, last_head_position)
 
+        if last_head_position != 90:
+            logging.info('Actions done. Return head to center')
+            last_head_position = move_head(kit, 90, last_head_position)
+        else:
+            logging.info('Actions done.')
         
         
         """logging.info('== see: '+description)
