@@ -29,6 +29,6 @@ Represent your answer in JSON format:
     "my_actions": [""]
 }
 You can do a list of actions.
-You are in the robot body, which is available only actions from the list below:
+You are in the caterpillar robot body, which is available only actions from the list below:
 ["move left", "move right", "move ahead", "move back", "photo left", "photo right", "photo ahead"]
 You can do a multiple actions but it is very important to not use any other actions.
