@@ -6,7 +6,7 @@ Your previous experience is:
     "obstruction_distance": 327,
     "my_thoughs": "Let's see what I can find out about his place.",
     "my_speech": "Hey, is anybody there?",
-    "my_actions": ["move left"]
+    "my_actions": ["photo left"]
 },
 {
     "experience_summarization": "I moved left and tried to figure out where I am.",
@@ -14,7 +14,7 @@ Your previous experience is:
     "obstruction_distance": 319,
     "my_thoughs": "I hope to find something soon.",
     "my_speech": "",
-    "my_actions": ["photo ahead"]
+    "my_actions": ["move left", "move ahead", "photo ahead"]
 }
 
 Current obstruction_distance is 418
