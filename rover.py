@@ -93,11 +93,11 @@ def move_tracks(pca, answer):
         # tracks go back
         set_track(pca, track = 0, speed = default_speed, direction = 1)
         set_track(pca, track = 1, speed = default_speed, direction = 0)
-    elif 'turn right' in answer:
+    elif 'move right' in answer:
         # tracks go left
         set_track(pca, track = 0, speed = default_speed, direction = 0)
         set_track(pca, track = 1, speed = default_speed, direction = 0)
-    elif 'turn left' in answer:
+    elif 'move left' in answer:
         # tracks go right
         set_track(pca, track = 0, speed = default_speed, direction = 1)
         set_track(pca, track = 1, speed = default_speed, direction = 1)
