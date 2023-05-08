@@ -21,7 +21,7 @@ def main():
     # enable logging
     logging.basicConfig(level=logging.INFO)
 
-    life_length = 2
+    life_length = 1
 
     """# Tracks init
     logging.info('Init tracks')
