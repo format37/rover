@@ -14,7 +14,7 @@ Your previous experience is:
     "obstruction_distance": 319,
     "my_thoughs": "I hope to find something soon.",
     "my_speech": "",
-    "my_actions": ["look ahead"]
+    "my_actions": ["photo ahead"]
 }
 
 Current obstruction_distance is 418
@@ -30,5 +30,5 @@ Represent your answer in JSON format:
 }
 You can do a list of actions.
 You are in the robot body, which is available only actions from the list below:
-["move left", "move right", "move ahead", "move back", "look left", "look right"]
+["move left", "move right", "move ahead", "move back", "photo left", "photo right", "photo ahead"]
 You can do a multiple actions but it is very important to not use any other actions.
