@@ -4,7 +4,7 @@ import wave
 # Set the audio parameters
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 44100
+RATE = 48000
 CHUNK = 1024
 RECORD_SECONDS = 5
 WAVE_OUTPUT_FILENAME = "output.wav"
@@ -12,9 +12,21 @@ WAVE_OUTPUT_FILENAME = "output.wav"
 # Initialize PyAudio
 audio = pyaudio.PyAudio()
 
+# Find the index of the audio card
+device_index = None
+for i in range(audio.get_device_count()):
+    dev = audio.get_device_info_by_index(i)
+    if 'Device' in dev['name']:
+        device_index = dev['index']
+        break
+
+if device_index is None:
+    raise ValueError("Audio card not found.")
+
 # Open the microphone stream
 stream = audio.open(format=FORMAT, channels=CHANNELS,
                     rate=RATE, input=True,
+                    input_device_index=device_index,
                     frames_per_buffer=CHUNK)
 
 print("Recording...")
