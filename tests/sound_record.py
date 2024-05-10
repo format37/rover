@@ -18,6 +18,7 @@ for i in range(audio.get_device_count()):
     dev = audio.get_device_info_by_index(i)
     if 'Device' in dev['name']:
         device_index = dev['index']
+        print(f'[{i}] Device found: {dev["name"]}')
         break
 
 if device_index is None:
