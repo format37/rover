@@ -27,3 +27,9 @@ To configure CPU and others, go there:
 ```
 sudo nano /etc/nvpmodel.conf
 ```
+### Installation
+* Pyaudio
+```
+sudo apt-get install portaudio19-dev python3-dev python3-pip
+python3 -m pip install pyaudio
+```
