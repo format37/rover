@@ -23,6 +23,10 @@ pca = [
 	PCA9685(i2c_bus,address=0x41)
 	]
 
+for i in range(0,2):
+	pca[i].frequency = 60
+	pca[i].channels[0].duty_cycle = 0
+	pca[i].channels[1].duty_cycle = 0xffff
 print('start')
 cmd = ''
 while cmd != 'x':

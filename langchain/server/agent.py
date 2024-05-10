@@ -31,7 +31,10 @@ class Movement:
 
     def move_track(self, left_speed, right_speed):
         url = f'{self.base_url}/move_track'
-        data = {'left_speed': left_speed, 'right_speed': right_speed}
+        data = {
+            'left_speed': left_speed, 
+            'right_speed': right_speed
+            }
         response = requests.post(url, json=data)
 
         if response.status_code == 200:
@@ -44,3 +47,5 @@ if __name__ == '__main__':
     movement_port = 5000
     movement = Movement(rover_address, movement_port)
     movement.test_api()
+    movement.move_track(1, 1)
+    print('Done.')

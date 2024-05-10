@@ -51,13 +51,11 @@ def move_track():
     logging.info('tracks stop')
     set(pca, track = 0, speed = 0, direction = 1)
     set(pca, track = 1, speed = 0, direction = 1)
+
     logging.info('done')
 
     return jsonify({'message': 'done'})
 
 
 if __name__ == '__main__':
-	
-    
-	
     app.run(host='0.0.0.0', port=5000)
