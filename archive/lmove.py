@@ -24,8 +24,8 @@ pca = [
 	]
 
 print('start')
-set_track(track = 0, speed = default_speed, direction = 0)
+set_track(track = 0, speed = default_speed, direction = 1)
 time.sleep(delay)
 print('stop')
-set_track(track = 0, speed = 0, direction = 0)
+set_track(track = 0, speed = 0, direction = 1)
 print('done')
