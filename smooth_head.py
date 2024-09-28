@@ -36,7 +36,7 @@ def main():
 
     # Move head front
     logging.info('head front')
-    smooth_move(head_servo, 0, 90, duration=2)
+    smooth_move(head_servo, 180, 90, duration=2)
 
 if __name__ == '__main__':
     main()
