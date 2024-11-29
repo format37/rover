@@ -85,23 +85,23 @@ class RobotController:
         self.move_tracks(1, 1)  # Forward
         self.smooth_move_head(90, 180)  # Look left
 
-        # Turn right
-        self.logger.info('Starting right turn sequence')
-        self.move_tracks(0, 0)  # Backward
-        self.smooth_move_head(180, 0)  # Look right
+        # # Turn right
+        # self.logger.info('Starting right turn sequence')
+        # self.move_tracks(0, 0)  # Backward
+        # self.smooth_move_head(180, 0)  # Look right
 
-        # Move forward
-        self.logger.info('Starting forward sequence')
-        self.move_tracks(0, 1)  # Turn
-        self.smooth_move_head(0, 90)  # Look forward
+        # # Move forward
+        # self.logger.info('Starting forward sequence')
+        # self.move_tracks(0, 1)  # Turn
+        # self.smooth_move_head(0, 90)  # Look forward
 
-        # Move backward briefly
-        self.logger.info('Moving backward briefly')
-        self.move_tracks(0, 0)  # Backward
-        time.sleep(1)  # Backward movement duration
+        # # Move backward briefly
+        # self.logger.info('Moving backward briefly')
+        # self.move_tracks(0, 0)  # Backward
+        # time.sleep(1)  # Backward movement duration
 
-        # Return head to center
-        self.smooth_move_head(90, 90)
+        # # Return head to center
+        # self.smooth_move_head(90, 90)
 
         # Stop
         self.stop_tracks()
