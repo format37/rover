@@ -1,2 +1,3 @@
 numpy==2.1.3
 pyrealsense2==2.55.1.6486
+opencv-python==4.10.0.84

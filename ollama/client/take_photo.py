@@ -8,8 +8,8 @@ def camera_capture():
     config = rs.config()
     
     # Configure both depth and color streams
-    config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 30)
-    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30) # Up to 90 fps
+    config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30) # Up to 30 fps
     
     align = rs.align(rs.stream.color)
     pipeline.start(config)
