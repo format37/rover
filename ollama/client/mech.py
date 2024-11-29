@@ -23,7 +23,7 @@ def main():
 	# enable logging
 	logging.basicConfig(level=logging.INFO)
 
-	default_speed = 0.1
+	default_speed = 0.05
 
 	# tracks init
 	logging.info('Init tracks')
@@ -41,7 +41,7 @@ def main():
 	# # servo init
 	# logging.info('Init servo')
 	# kit = ServoKit(channels=16, address=0x42)
-	delay = 1.8
+	delay = 2
 
 	# tracks go cw
 	logging.info('tracks go left')
