@@ -101,60 +101,60 @@ class OllamaClient:
         Returns:
             Parsed JSON response from model
         """
-        try:
-            # Encode image
-            image_base64 = await self.encode_image(image_path)
-            
-            # Prepare request payload
-            payload = {
-                "model": self.config.model,
-                "prompt": custom_prompt or self.prompt_template,
-                "images": [image_base64]
-            }
-            
-            # Make API request
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.config.api_url,
-                    json=payload,
-                    timeout=self.config.timeout
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise RuntimeError(
-                            f"API request failed with status {response.status}: {error_text}"
-                        )
-                    
-                    # Process streaming response
-                    model_response = ""
-                    async for line in response.content:
-                        if len(model_response) > self.config.max_response_size:
-                            raise RuntimeError("Response size exceeded limit")
-                            
-                        decoded_line = line.decode('utf-8').strip()
-                        if not decoded_line:
-                            continue
-                            
-                        try:
-                            json_obj = json.loads(decoded_line)
-                            model_response += json_obj.get('response', '')
-                            
-                            if json_obj.get('done', False):
-                                break
-                        except json.JSONDecodeError as e:
-                            self.logger.warning(f"Error parsing response line: {e}")
-                            continue
-            
-            # Parse final response
-            try:
-                return json.loads(model_response)
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Error parsing final response: {e}")
-                raise ValueError(f"Invalid JSON response: {model_response}")
+        # try:
+        # Encode image
+        image_base64 = await self.encode_image(image_path)
+        
+        # Prepare request payload
+        payload = {
+            "model": self.config.model,
+            "prompt": custom_prompt or self.prompt_template,
+            "images": [image_base64]
+        }
+        
+        # Make API request
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.config.api_url,
+                json=payload,
+                timeout=self.config.timeout
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise RuntimeError(
+                        f"API request failed with status {response.status}: {error_text}"
+                    )
                 
-        except Exception as e:
-            self.logger.error(f"Error processing image: {e}")
-            raise
+                # Process streaming response
+                model_response = ""
+                async for line in response.content:
+                    if len(model_response) > self.config.max_response_size:
+                        raise RuntimeError("Response size exceeded limit")
+                        
+                    decoded_line = line.decode('utf-8').strip()
+                    if not decoded_line:
+                        continue
+                        
+                    try:
+                        json_obj = json.loads(decoded_line)
+                        model_response += json_obj.get('response', '')
+                        
+                        if json_obj.get('done', False):
+                            break
+                    except json.JSONDecodeError as e:
+                        self.logger.warning(f"Error parsing response line: {e}")
+                        continue
+        
+        # Parse final response
+        try:
+            return json.loads(model_response)
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error parsing final response: {e}")
+            raise ValueError(f"Invalid JSON response: {model_response}")
+                
+        # except Exception as e:
+        #     self.logger.error(f"Error processing image: {e}")
+        #     raise
 
     async def validate_response(self, response: Dict[str, Any]) -> bool:
         """
