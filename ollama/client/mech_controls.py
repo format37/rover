@@ -70,6 +70,8 @@ class RobotController:
             duration: Time to complete movement in seconds
             steps: Number of intermediate steps
         """
+        if start_angle == end_angle:
+            return
         self.logger.info(f'Moving head from {start_angle}° to {end_angle}°')
         step_delay = duration / steps
         

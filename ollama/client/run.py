@@ -39,6 +39,7 @@ async def main():
     # Create client
     client = OllamaClient(config_path="config.json")
     last_head_angle = 90
+    counter = 0
     while True:
         # Process image
         response = await client.process_image("camera_output/color_frame.jpg")
@@ -52,7 +53,9 @@ async def main():
             last_head_angle = new_head_angle
         else:
             print("Could not get new_head_angle")
-        break
+        counter += 1
+        if counter >= 5:
+            break
     await mech.smooth_head_move(last_head_angle, 90)
 
 if __name__ == '__main__':
