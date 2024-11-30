@@ -81,7 +81,7 @@ class OllamaClient:
         """
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"file://{image_path}") as response:
+                async with session.get(f"{image_path}") as response:
                     image_data = await response.read()
                     return base64.b64encode(image_data).decode('utf-8')
         except Exception as e:
