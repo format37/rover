@@ -129,7 +129,7 @@ class TTSClient:
             self.logger.error(f"Error during audio playback: {e}")
             return False
 
-    def synthesize_and_play(self, text: str, output_file: str = 'speech.wav') -> bool:
+    async def synthesize_and_play(self, text: str, output_file: str = 'speech.wav'):
         """
         Synthesize text to speech and play it immediately.
         
@@ -141,8 +141,7 @@ class TTSClient:
             bool: True if both synthesis and playback were successful
         """
         if self.synthesize(text, output_file):
-            return self.play_audio(output_file)
-        return False
+            self.play_audio(output_file)
 
 
 async def main():
