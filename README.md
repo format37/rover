@@ -37,6 +37,10 @@ pip install -r requirements.txt
 ```
 python client.py
 ```
+### PyAidio installation
+```
+sudo apt-get install portaudio19-dev
+```
 ### Realsense camera installation on Jetson nano
 0. Ensure that python3 is installed and defined as default python. I am using 3.8.
 To install the `pyrealsense2` Python wrapper on a Jetson Nano, you need to build the Intel RealSense SDK (`librealsense`) from source, as pre-built binaries are not compatible with the ARM architecture of the Jetson Nano. This process will also install the necessary RealSense software. Here's a step-by-step guide:
