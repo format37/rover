@@ -1,7 +1,9 @@
-from mech_controls import RobotController
 import asyncio
+import logging
+from mech_controls import RobotController
 
 async def main():
+    logging.basicConfig(level=logging.INFO)
     robot = RobotController()
 
     await robot.look_right()
