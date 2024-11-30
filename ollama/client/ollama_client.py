@@ -216,7 +216,7 @@ async def main():
     
     try:
         # Process image
-        response = await client.process_image("camera_output/color_frame.jpg")
+        response = await client.process_image("./camera_output/color_frame.jpg")
         
         # Validate response
         if await client.validate_response(response):
