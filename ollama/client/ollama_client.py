@@ -118,6 +118,7 @@ class OllamaClient:
         
         # Make API request
         async with aiohttp.ClientSession() as session:
+            logging.info(f"Sending {image_path} to {self.config.api_url}")
             async with session.post(
                 self.config.api_url,
                 json=payload,
@@ -220,7 +221,7 @@ async def main():
     
     try:
         # Process image
-        response = await client.process_image("./camera_output/color_frame.jpg")
+        response = await client.process_image("camera_output/color_frame.jpg")
         
         # Validate response
         if await client.validate_response(response):
