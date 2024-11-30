@@ -38,7 +38,9 @@ async def main():
         response = await llm_client.process_image("camera_output/color_frame.jpg")
         print(f"type: {type(response)}")
         print(f"Response:\n{response}")
-        append_response_to_text_file(response, "response_log.txt")
+        # append_response_to_text_file(response, "response_log.txt")
+        # Save chat history
+        llm_client.save_chat_history("chat_history.json")
         
         # Pronounce speech from response
         try:
