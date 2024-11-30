@@ -24,6 +24,7 @@ async def main():
     await camera.start()
     llm_client = OllamaClient(config_path="config.json")
     tts_client = TTSClient(config_path="config.json")
+    track_speed = 0.05
 
 
     last_head_angle = 90
@@ -55,6 +56,27 @@ async def main():
             last_head_angle = new_head_angle
         else:
             print("Could not get new_head_angle")
+
+        # Move tracks
+        left_track_active = False
+        right_track_active = False
+        if 'left_track' in response:
+            if "direction" in response['left_track']:
+                direction_left = response['left_track']['direction']
+                left_track_active = True
+        if 'right_track' in response:
+            if "direction" in response['right_track']:
+                direction_right = response['right_track']['direction']
+                direction_right = 1 if direction_right == 0 else 0 # Reverse direction
+                right_track_active = True
+        if left_track_active and right_track_active:
+            await asyncio.gather(
+                mech.smooth_track_set(0, track_speed, 1),
+                mech.smooth_track_set(1, track_speed, 0)
+            )
+            await asyncio.sleep(2.0)
+            await mech.stop()
+
         counter += 1
         if counter >= 5:
             break
