@@ -152,7 +152,8 @@ class OllamaClient:
         
         # Parse final response
         try:
-            return json.loads(model_response)
+            # return json.loads(model_response)
+            return self.clean_json_response(model_response)
         except json.JSONDecodeError as e:
             self.logger.error(f"Error parsing final response: {e}")
             raise ValueError(f"Invalid JSON response: {model_response}")
@@ -207,6 +208,11 @@ class OllamaClient:
         except (KeyError, TypeError) as e:
             self.logger.warning(f"Response validation failed: {e}")
             return False
+
+    async def clean_json_response(self, response: str) -> str:
+        """Remove any inline comments from JSON response"""
+        import re
+        return re.sub(r'//.*$', '', response, flags=re.MULTILINE)
 
 async def main():
     """Example usage of OllamaClient"""
