@@ -70,23 +70,27 @@ class OllamaClient:
             raise
 
     async def encode_image(self, image_path: str) -> str:
-        """
-        Encode image file to base64 asynchronously
+        # """
+        # Encode image file to base64 asynchronously
         
-        Args:
-            image_path: Path to image file
+        # Args:
+        #     image_path: Path to image file
             
-        Returns:
-            Base64 encoded image string
-        """
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{image_path}") as response:
-                    image_data = await response.read()
-                    return base64.b64encode(image_data).decode('utf-8')
-        except Exception as e:
-            self.logger.error(f"Error encoding image: {e}")
-            raise
+        # Returns:
+        #     Base64 encoded image string
+        # """
+        # try:
+        #     async with aiohttp.ClientSession() as session:
+        #         async with session.get(f"{image_path}") as response:
+        #             image_data = await response.read()
+        #             return base64.b64encode(image_data).decode('utf-8')
+        # except Exception as e:
+        #     self.logger.error(f"Error encoding image: {e}")
+        #     raise
+        """Encodes an image file to a base64 string."""
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read())
+            return encoded_string.decode('utf-8')
 
     async def process_image(self, 
                           image_path: str,
