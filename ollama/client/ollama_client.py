@@ -155,7 +155,8 @@ class OllamaClient:
         try:
             # return json.loads(model_response)
             # return await self.clean_json_response(model_response)
-            return model_response
+            # return model_response
+            return json.loads(self.clean_json_response(model_response))
         except json.JSONDecodeError as e:
             self.logger.error(f"Error parsing final response: {e}")
             raise ValueError(f"Invalid JSON response: {model_response}")
@@ -211,53 +212,59 @@ class OllamaClient:
             self.logger.warning(f"Response validation failed: {e}")
             return False
 
-    async def clean_json_response(self, response: str) -> Dict[str, Any]:
-        """
-        Clean and parse JSON response from model, handling common formatting issues
+    # async def clean_json_response(self, response: str) -> Dict[str, Any]:
+    #     """
+    #     Clean and parse JSON response from model, handling common formatting issues
         
-        Args:
-            response: Raw response string from model
+    #     Args:
+    #         response: Raw response string from model
             
-        Returns:
-            Parsed JSON dictionary
-        """
-        # Remove markdown code blocks
+    #     Returns:
+    #         Parsed JSON dictionary
+    #     """
+    #     # Remove markdown code blocks
+    #     response = response.replace("```json", "")
+    #     response = response.replace("```", "")
+        
+    #     # Remove inline comments
+    #     response = re.sub(r'//.*$', '', response, flags=re.MULTILINE)
+        
+    #     # Fix common JSON formatting issues
+    #     response = response.replace('\n', ' ').strip()
+    #     response = re.sub(r',\s*}', '}', response)  # Remove trailing commas
+    #     response = re.sub(r'\s+', ' ', response)    # Normalize whitespace
+        
+    #     # Handle double quotes inside thought strings
+    #     response = re.sub(r'(?<!\\)"(?=.*".*})', '\\"', response)
+        
+    #     try:
+    #         # Parse the cleaned response
+    #         json_response = json.loads(response)
+            
+    #         # Ensure required structure exists
+    #         if 'movement' not in json_response:
+    #             json_response['movement'] = {}
+    #         if 'head' not in json_response['movement']:
+    #             json_response['movement']['head'] = {'angle': 90}  # Default center position
+                
+    #         return json_response
+            
+    #     except json.JSONDecodeError as e:
+    #         self.logger.error(f"Failed to parse JSON after cleaning: {e}")
+    #         self.logger.debug(f"Cleaned response was: {response}")
+    #         # Return a safe default response
+    #         return {
+    #             "thoughts": "Error parsing response",
+    #             "movement": {
+    #                 "head": {"angle": 90}
+    #             }
+    #         }
+
+    async def clean_json_response(self, response: str) -> str:
+        """Remove any inline comments from JSON response"""
         response = response.replace("```json", "")
         response = response.replace("```", "")
-        
-        # Remove inline comments
-        response = re.sub(r'//.*$', '', response, flags=re.MULTILINE)
-        
-        # Fix common JSON formatting issues
-        response = response.replace('\n', ' ').strip()
-        response = re.sub(r',\s*}', '}', response)  # Remove trailing commas
-        response = re.sub(r'\s+', ' ', response)    # Normalize whitespace
-        
-        # Handle double quotes inside thought strings
-        response = re.sub(r'(?<!\\)"(?=.*".*})', '\\"', response)
-        
-        try:
-            # Parse the cleaned response
-            json_response = json.loads(response)
-            
-            # Ensure required structure exists
-            if 'movement' not in json_response:
-                json_response['movement'] = {}
-            if 'head' not in json_response['movement']:
-                json_response['movement']['head'] = {'angle': 90}  # Default center position
-                
-            return json_response
-            
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse JSON after cleaning: {e}")
-            self.logger.debug(f"Cleaned response was: {response}")
-            # Return a safe default response
-            return {
-                "thoughts": "Error parsing response",
-                "movement": {
-                    "head": {"angle": 90}
-                }
-            }
+        return re.sub(r'//.*$', '', response, flags=re.MULTILINE)
 
     async def get_head_angle(self, response: Dict[str, Any]) -> Optional[int]:
         """

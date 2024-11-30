@@ -52,7 +52,7 @@ async def main():
         #     last_head_angle = new_head_angle
         # else:
         #     print("Could not get new_head_angle")
-        # break        
+        break        
 
 if __name__ == '__main__':
     asyncio.run(main())
