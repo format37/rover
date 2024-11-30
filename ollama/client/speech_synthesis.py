@@ -27,7 +27,7 @@ def load_config(config_path: str) -> dict:
             logger.warning(f"Config file {config_path} not found. Using defaults.")
             return None
 
-def text_to_speech(text, server_url='http://localhost:5000/synthesize', output_file='speech.wav'):
+def text_to_speech(text, server_url='http://localhost:5000/synthesize', output_file='speech.wav', logger=None):
     """
     Send text to the TTS server and save the returned audio file
     
@@ -65,6 +65,7 @@ def text_to_speech(text, server_url='http://localhost:5000/synthesize', output_f
 # Example usage
 if __name__ == '__main__':
     # Configure logging
+    logger = logging.getLogger(__name__)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -72,4 +73,4 @@ if __name__ == '__main__':
     config = load_config("config.json")
     tts_api_url = config['tts_api_url']
     text = "Hello, this is a test of the text-to-speech server."
-    text_to_speech(text, server_url=tts_api_url)
+    text_to_speech(text, server_url=tts_api_url, logger=logger)
