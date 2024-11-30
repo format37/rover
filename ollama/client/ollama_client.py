@@ -213,6 +213,14 @@ class OllamaClient:
         """Remove any inline comments from JSON response"""
         import re
         return re.sub(r'//.*$', '', response, flags=re.MULTILINE)
+    
+    def get_head_angle(self, response: Dict[str, Any]) -> Optional[int]:
+        """Extract head angle from response"""
+        try:
+            return response.get('movement', {}).get('head', {}).get('angle')
+        except AttributeError:
+            self.logger.warning("Invalid response structure")
+            return None
 
 async def main():
     """Example usage of OllamaClient"""

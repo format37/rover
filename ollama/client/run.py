@@ -44,10 +44,13 @@ async def main():
         response = await client.process_image("camera_output/color_frame.jpg")
         print(f"Response:\n{response}")
         append_response_to_text_file(response, "response_log.txt")
-        json_response = json.dumps(response, indent=2)
-        new_head_angle = int(json_response.movement.head.angle)
-        await mech.smooth_head_move(last_head_angle, new_head_angle)
-        last_head_angle = new_head_angle
+        new_head_angle = client.get_head_angle(response)
+        if new_head_angle is not None:
+            print(f"new_head_angle: {new_head_angle}")
+            await mech.smooth_head_move(last_head_angle, new_head_angle)
+            last_head_angle = new_head_angle
+        else:
+            print("Could not get new_head_angle")
         break        
 
 if __name__ == '__main__':
