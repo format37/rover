@@ -66,4 +66,4 @@ if __name__ == '__main__':
     config = load_config("config.json")
     tts_api_url = config['tts_api_url']
     text = "Hello, this is a test of the text-to-speech server."
-    text_to_speech(text)
+    text_to_speech(text, server_url=tts_api_url)
