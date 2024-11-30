@@ -12,7 +12,7 @@ import re
 class OllamaConfig:
     """Configuration for Ollama client"""
     model: str = "llava:34b"
-    api_url: str = "http://localhost:11434/api/generate"
+    ollama_api_url: str = "http://localhost:11434/api/generate"
     prompt_path: str = "prompts/robot_prompt.txt"
     timeout: float = 30.0
     max_response_size: int = 1024 * 1024  # 1MB
@@ -119,9 +119,9 @@ class OllamaClient:
         
         # Make API request
         async with aiohttp.ClientSession() as session:
-            logging.info(f"Sending {image_path} to {self.config.api_url}")
+            logging.info(f"Sending {image_path} to {self.config.ollama_api_url}")
             async with session.post(
-                self.config.api_url,
+                self.config.ollama_api_url,
                 json=payload,
                 timeout=self.config.timeout
             ) as response:
