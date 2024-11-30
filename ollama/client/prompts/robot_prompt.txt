@@ -6,6 +6,8 @@ The available movements are:
 
 Answer in JSON format:
 {
+    "observations": "<describe what you see>",
+    "feelings": "<describe how you feel>",
     "thoughts": "<describe your thinking process>",
     "speech": "<what you want to say>",
     "movement": {

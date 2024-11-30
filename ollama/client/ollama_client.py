@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 import re
+from collections import deque
 
 @dataclass
 class OllamaConfig:
@@ -18,31 +19,20 @@ class OllamaConfig:
     audio_device: str = "default"
     timeout: float = 30.0
     max_response_size: int = 1024 * 1024  # 1MB
+    max_history_size: int = 10  # Maximum number of chat history entries to keep
 
 class OllamaClient:
-    """Async client for Ollama API interactions"""
+    """Async client for Ollama API interactions with chat history support"""
 
     def __init__(self, config_path: str = "config.json"):
-        """
-        Initialize Ollama client
-        
-        Args:
-            config_path: Path to configuration JSON file
-        """
+        """Initialize Ollama client with chat history support"""
         self.logger = logging.getLogger(__name__)
         self.config = self._load_config(config_path)
-        self.prompt_template = self._load_prompt_template()
-        
+        self.base_prompt_template = self._load_prompt_template()
+        self.chat_history = []
+
     def _load_config(self, config_path: str) -> OllamaConfig:
-        """
-        Load configuration from JSON file
-        
-        Args:
-            config_path: Path to configuration file
-            
-        Returns:
-            OllamaConfig object with settings
-        """
+        """Load configuration from JSON file"""
         config_file = Path(config_path)
         if config_file.exists():
             self.logger.info(f"Loading configuration from {config_path}")
@@ -58,12 +48,7 @@ class OllamaClient:
             return OllamaConfig()
 
     def _load_prompt_template(self) -> str:
-        """
-        Load prompt template from file
-        
-        Returns:
-            Prompt template string
-        """
+        """Load base prompt template from file"""
         prompt_file = Path(self.config.prompt_path)
         try:
             with open(prompt_file, 'r') as f:
@@ -72,24 +57,60 @@ class OllamaClient:
             self.logger.error(f"Error loading prompt template: {e}")
             raise
 
-    async def encode_image(self, image_path: str) -> str:
-        # """
-        # Encode image file to base64 asynchronously
+    def _build_prompt_with_history(self) -> str:
+        """Build complete prompt including chat history"""
+        # Convert chat history to formatted string
+        history_str = json.dumps(self.chat_history, indent=2) if self.chat_history else "[]"
         
-        # Args:
-        #     image_path: Path to image file
-            
-        # Returns:
-        #     Base64 encoded image string
-        # """
-        # try:
-        #     async with aiohttp.ClientSession() as session:
-        #         async with session.get(f"{image_path}") as response:
-        #             image_data = await response.read()
-        #             return base64.b64encode(image_data).decode('utf-8')
-        # except Exception as e:
-        #     self.logger.error(f"Error encoding image: {e}")
-        #     raise
+        # Insert chat history into the base prompt
+        prompt_with_history = f"""You are robot. You can see, speak and move head. You have memory of your past interactions.
+Your chat history is:
+{history_str}
+
+The available movements are:
+- Left track: direction (0=forward, 1=backward)
+- Right track: direction (0=forward, 1=backward)
+- Head position: angle 0-180 degrees (0=full left, 90=center, 180=full right)
+
+Based on your memory and current observation, answer in JSON format:
+{{
+    "observations": "<describe what you see>",
+    "feelings": "<describe how you feel, considering your past experiences>",
+    "thoughts": "<describe your thinking process, referencing past events when relevant>",
+    "speech": "<what you want to say, maintaining consistency with past interactions>",
+    "movement": {{
+        "head": {{
+            "angle": <0-180>
+        }},
+        "left_track": {{
+            "direction": <0 or 1>
+        }},
+        "right_track": {{
+            "direction": <0 or 1>
+        }}
+    }}
+}}"""
+        return prompt_with_history
+
+    def update_chat_history(self, response: Dict[str, Any]):
+        """Update chat history with new response while maintaining size limit"""
+        # Create history entry with relevant fields
+        history_entry = {
+            "observations": response.get("observations", ""),
+            "feelings": response.get("feelings", ""),
+            "thoughts": response.get("thoughts", ""),
+            "speech": response.get("speech", ""),
+            "movement": response.get("movement", {})
+        }
+        
+        # Add new entry to history
+        self.chat_history.append(history_entry)
+        
+        # Trim history if it exceeds max size
+        if len(self.chat_history) > self.config.max_history_size:
+            self.chat_history = self.chat_history[-self.config.max_history_size:]
+
+    async def encode_image(self, image_path: str) -> str:
         """Encodes an image file to a base64 string."""
         with open(image_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read())
@@ -98,24 +119,14 @@ class OllamaClient:
     async def process_image(self, 
                           image_path: str,
                           custom_prompt: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Process image through Ollama API
-        
-        Args:
-            image_path: Path to image file
-            custom_prompt: Optional custom prompt to use instead of template
-            
-        Returns:
-            Parsed JSON response from model
-        """
-        # try:
+        """Process image through Ollama API with chat history"""
         # Encode image
         image_base64 = await self.encode_image(image_path)
         
-        # Prepare request payload
+        # Prepare request payload using prompt with history
         payload = {
             "model": self.config.model,
-            "prompt": custom_prompt or self.prompt_template,
+            "prompt": custom_prompt or self._build_prompt_with_history(),
             "images": [image_base64]
         }
         
@@ -153,138 +164,32 @@ class OllamaClient:
                         self.logger.warning(f"Error parsing response line: {e}")
                         continue
         
-        # Parse final response
+        # Parse and validate final response
         try:
-            # return json.loads(model_response)
-            # return await self.clean_json_response(model_response)
-            # return model_response
-            json_response = await self.clean_json_response(model_response)
-            print(f"response cleaned: {json_response}")
-            return json.loads(json_response)
+            clean_response = await self.clean_json_response(model_response)
+            parsed_response = json.loads(clean_response)
+            
+            # Update chat history with new response
+            self.update_chat_history(parsed_response)
+            
+            return parsed_response
+            
         except json.JSONDecodeError as e:
             self.logger.error(f"Error parsing final response: {e}")
             raise ValueError(f"Invalid JSON response: {model_response}")
-                
-        # except Exception as e:
-        #     self.logger.error(f"Error processing image: {e}")
-        #     raise
-
-    async def validate_response(self, response: Dict[str, Any]) -> bool:
-        """
-        Validate response format
-        
-        Args:
-            response: Parsed JSON response from model
-            
-        Returns:
-            True if response is valid, False otherwise
-        """
-        required_fields = {'thoughts', 'speech', 'movement'}
-        movement_fields = {'left_track', 'right_track', 'head'}
-        track_fields = {'speed', 'direction'}
-        
-        try:
-            # Check top-level fields
-            if not all(field in response for field in required_fields):
-                return False
-                
-            # Check movement structure
-            movement = response['movement']
-            if not all(field in movement for field in movement_fields):
-                return False
-                
-            # Check track parameters
-            for track in ['left_track', 'right_track']:
-                track_data = movement[track]
-                if not all(field in track_data for field in track_fields):
-                    return False
-                    
-                # Validate value ranges
-                speed = track_data['speed']
-                direction = track_data['direction']
-                if not (0 <= speed <= 100 and direction in [0, 1]):
-                    return False
-                    
-            # Check head angle
-            head_angle = movement['head']['angle']
-            if not (0 <= head_angle <= 180):
-                return False
-                
-            return True
-            
-        except (KeyError, TypeError) as e:
-            self.logger.warning(f"Response validation failed: {e}")
-            return False
-
-    # async def clean_json_response(self, response: str) -> Dict[str, Any]:
-    #     """
-    #     Clean and parse JSON response from model, handling common formatting issues
-        
-    #     Args:
-    #         response: Raw response string from model
-            
-    #     Returns:
-    #         Parsed JSON dictionary
-    #     """
-    #     # Remove markdown code blocks
-    #     response = response.replace("```json", "")
-    #     response = response.replace("```", "")
-        
-    #     # Remove inline comments
-    #     response = re.sub(r'//.*$', '', response, flags=re.MULTILINE)
-        
-    #     # Fix common JSON formatting issues
-    #     response = response.replace('\n', ' ').strip()
-    #     response = re.sub(r',\s*}', '}', response)  # Remove trailing commas
-    #     response = re.sub(r'\s+', ' ', response)    # Normalize whitespace
-        
-    #     # Handle double quotes inside thought strings
-    #     response = re.sub(r'(?<!\\)"(?=.*".*})', '\\"', response)
-        
-    #     try:
-    #         # Parse the cleaned response
-    #         json_response = json.loads(response)
-            
-    #         # Ensure required structure exists
-    #         if 'movement' not in json_response:
-    #             json_response['movement'] = {}
-    #         if 'head' not in json_response['movement']:
-    #             json_response['movement']['head'] = {'angle': 90}  # Default center position
-                
-    #         return json_response
-            
-    #     except json.JSONDecodeError as e:
-    #         self.logger.error(f"Failed to parse JSON after cleaning: {e}")
-    #         self.logger.debug(f"Cleaned response was: {response}")
-    #         # Return a safe default response
-    #         return {
-    #             "thoughts": "Error parsing response",
-    #             "movement": {
-    #                 "head": {"angle": 90}
-    #             }
-    #         }
 
     async def clean_json_response(self, response: str) -> str:
-        """Remove any inline comments from JSON response"""
+        """Remove any markdown and comments from JSON response"""
         response = response.replace("```json", "")
         response = response.replace("```", "")
         return re.sub(r'//.*$', '', response, flags=re.MULTILINE)
 
     async def get_head_angle(self, response: Dict[str, Any]) -> Optional[int]:
-        """
-        Extract head angle from response, with improved error handling
-        
-        Args:
-            response: Parsed JSON response dictionary
-            
-        Returns:
-            Head angle as integer, or None if invalid
-        """
+        """Extract head angle from response with validation"""
         try:
             angle = response.get('movement', {}).get('head', {}).get('angle')
             if angle is not None:
                 angle = int(angle)
-                # Ensure angle is within valid range
                 if 0 <= angle <= 180:
                     return angle
                 else:
@@ -298,27 +203,43 @@ class OllamaClient:
             self.logger.warning(f"Error extracting head angle: {e}")
             return None
 
+    def save_chat_history(self, filepath: str):
+        """Save chat history to a JSON file"""
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.chat_history, f, indent=2)
+            self.logger.info(f"Chat history saved to {filepath}")
+        except Exception as e:
+            self.logger.error(f"Error saving chat history: {e}")
+
+    def load_chat_history(self, filepath: str):
+        """Load chat history from a JSON file"""
+        try:
+            with open(filepath, 'r') as f:
+                self.chat_history = json.load(f)
+            self.logger.info(f"Chat history loaded from {filepath}")
+        except Exception as e:
+            self.logger.error(f"Error loading chat history: {e}")
+            self.chat_history = []  # Reset to empty history on error
+
 async def main():
-    """Example usage of OllamaClient"""
-    # Configure logging
+    """Example usage of OllamaClient with chat history"""
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Create client
     client = OllamaClient(config_path="config.json")
     
     try:
-        # Process image
-        response = await client.process_image("camera_output/color_frame.jpg")
-        
-        # # Validate response
-        # if await client.validate_response(response):
-        print("Valid response received:")
-        print(json.dumps(response, indent=2))
-        # else:
-        #     print("Invalid response format")
+        # Process multiple images to build up chat history
+        for i in range(3):
+            response = await client.process_image("camera_output/color_frame.jpg")
+            print(f"\nResponse {i+1}:")
+            print(json.dumps(response, indent=2))
+            
+        # Save chat history
+        client.save_chat_history("chat_history.json")
             
     except Exception as e:
         print(f"Error: {e}")
