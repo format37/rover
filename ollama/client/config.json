@@ -4,6 +4,7 @@
     "tts_api_url": "http://192.168.0.4:5000/synthesize",
     "audio_device": "plughw:CARD=Device,DEV=0",
     "prompt_path": "prompts/robot_prompt.txt",
-    "timeout": 30.0,
-    "max_response_size": 1048576
+    "timeout": 120.0,
+    "max_response_size": 1048576,
+    "max_history_size": 10
 }

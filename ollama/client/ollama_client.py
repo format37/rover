@@ -122,6 +122,8 @@ Based on your memory and current observation, answer in JSON format:
         """Process image through Ollama API with chat history"""
         # Encode image
         image_base64 = await self.encode_image(image_path)
+
+        print(f"# prompt:\n{custom_prompt or self._build_prompt_with_history()}")
         
         # Prepare request payload using prompt with history
         payload = {
