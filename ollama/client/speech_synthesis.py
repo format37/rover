@@ -1,8 +1,9 @@
 import requests
 import json
 from pathlib import Path
+import logging
 
-def load_config(self, config_path: str) -> dict:
+def load_config(config_path: str) -> dict:
         """
         Load configuration from JSON file
         
@@ -14,16 +15,16 @@ def load_config(self, config_path: str) -> dict:
         """
         config_file = Path(config_path)
         if config_file.exists():
-            self.logger.info(f"Loading configuration from {config_path}")
+            logger.info(f"Loading configuration from {config_path}")
             try:
                 with open(config_file, 'r') as f:
                     config_data = json.load(f)
                 return config_data
             except Exception as e:
-                self.logger.warning(f"Error loading config: {e}. Using defaults.")
+                logger.warning(f"Error loading config: {e}. Using defaults.")
                 return None
         else:
-            self.logger.warning(f"Config file {config_path} not found. Using defaults.")
+            logger.warning(f"Config file {config_path} not found. Using defaults.")
             return None
 
 def text_to_speech(text, server_url='http://localhost:5000/synthesize', output_file='speech.wav'):
@@ -63,6 +64,11 @@ def text_to_speech(text, server_url='http://localhost:5000/synthesize', output_f
 
 # Example usage
 if __name__ == '__main__':
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     config = load_config("config.json")
     tts_api_url = config['tts_api_url']
     text = "Hello, this is a test of the text-to-speech server."
