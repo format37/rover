@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
+import re
 
 @dataclass
 class OllamaConfig:
@@ -211,7 +212,8 @@ class OllamaClient:
 
     async def clean_json_response(self, response: str) -> str:
         """Remove any inline comments from JSON response"""
-        import re
+        response = response.replace("```json", "")
+        response = response.replace("```", "")
         return re.sub(r'//.*$', '', response, flags=re.MULTILINE)
     
     def get_head_angle(self, response: Dict[str, Any]) -> Optional[int]:
