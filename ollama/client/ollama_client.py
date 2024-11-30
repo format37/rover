@@ -210,18 +210,80 @@ class OllamaClient:
             self.logger.warning(f"Response validation failed: {e}")
             return False
 
-    async def clean_json_response(self, response: str) -> str:
-        """Remove any inline comments from JSON response"""
+    async def clean_json_response(self, response: str) -> Dict[str, Any]:
+        """
+        Clean and parse JSON response from model, handling common formatting issues
+        
+        Args:
+            response: Raw response string from model
+            
+        Returns:
+            Parsed JSON dictionary
+        """
+        # Remove markdown code blocks
         response = response.replace("```json", "")
         response = response.replace("```", "")
-        return re.sub(r'//.*$', '', response, flags=re.MULTILINE)
-    
-    def get_head_angle(self, response: Dict[str, Any]) -> Optional[int]:
-        """Extract head angle from response"""
+        
+        # Remove inline comments
+        response = re.sub(r'//.*$', '', response, flags=re.MULTILINE)
+        
+        # Fix common JSON formatting issues
+        response = response.replace('\n', ' ').strip()
+        response = re.sub(r',\s*}', '}', response)  # Remove trailing commas
+        response = re.sub(r'\s+', ' ', response)    # Normalize whitespace
+        
+        # Handle double quotes inside thought strings
+        response = re.sub(r'(?<!\\)"(?=.*".*})', '\\"', response)
+        
         try:
-            return response.get('movement', {}).get('head', {}).get('angle')
-        except AttributeError:
-            self.logger.warning("Invalid response structure")
+            # Parse the cleaned response
+            json_response = json.loads(response)
+            
+            # Ensure required structure exists
+            if 'movement' not in json_response:
+                json_response['movement'] = {}
+            if 'head' not in json_response['movement']:
+                json_response['movement']['head'] = {'angle': 90}  # Default center position
+                
+            return json_response
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse JSON after cleaning: {e}")
+            self.logger.debug(f"Cleaned response was: {response}")
+            # Return a safe default response
+            return {
+                "thoughts": "Error parsing response",
+                "movement": {
+                    "head": {"angle": 90}
+                }
+            }
+
+    async def get_head_angle(self, response: Dict[str, Any]) -> Optional[int]:
+        """
+        Extract head angle from response, with improved error handling
+        
+        Args:
+            response: Parsed JSON response dictionary
+            
+        Returns:
+            Head angle as integer, or None if invalid
+        """
+        try:
+            angle = response.get('movement', {}).get('head', {}).get('angle')
+            if angle is not None:
+                angle = int(angle)
+                # Ensure angle is within valid range
+                if 0 <= angle <= 180:
+                    return angle
+                else:
+                    self.logger.warning(f"Head angle {angle} outside valid range [0-180]")
+                    return 90  # Return to center if invalid
+            else:
+                self.logger.warning("No head angle found in response")
+                return None
+                
+        except (TypeError, ValueError) as e:
+            self.logger.warning(f"Error extracting head angle: {e}")
             return None
 
 async def main():

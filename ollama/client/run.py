@@ -44,7 +44,7 @@ async def main():
         response = await client.process_image("camera_output/color_frame.jpg")
         print(f"Response:\n{response}")
         append_response_to_text_file(response, "response_log.txt")
-        new_head_angle = client.get_head_angle(response)
+        new_head_angle = await client.get_head_angle(response)
         if new_head_angle is not None:
             print(f"new_head_angle: {new_head_angle}")
             await mech.smooth_head_move(last_head_angle, new_head_angle)
