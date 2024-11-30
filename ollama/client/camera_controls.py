@@ -183,7 +183,7 @@ async def main():
     camera = CameraController(output_dir='camera_output')
     try:
         await camera.start()
-        await camera.capture_and_save(save_raw=True)
+        await camera.capture_and_save(save_raw=False)
     finally:
         await camera.stop()
 

@@ -21,6 +21,7 @@ async def main():
     # Initialize motoric and sensory controllers
     mech = RobotController()
     camera = CameraController(output_dir='camera_output')
+    await camera.start()
     llm_client = OllamaClient(config_path="config.json")
     tts_client = TTSClient(config_path="config.json")
 
@@ -30,11 +31,7 @@ async def main():
     while True:
         
         # Capture image
-        try:
-            await camera.start()
-            await camera.capture_and_save(save_raw=False)
-        finally:
-            await camera.stop()
+        await camera.capture_and_save(save_raw=False)
         
         # Process image and get response
         response = await llm_client.process_image("camera_output/color_frame.jpg")
@@ -61,6 +58,7 @@ async def main():
         counter += 1
         if counter >= 5:
             break
+    await camera.stop()
     await mech.smooth_head_move(last_head_angle, 90)
 
 if __name__ == '__main__':
