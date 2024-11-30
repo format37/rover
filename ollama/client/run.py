@@ -42,6 +42,7 @@ async def main():
     while True:
         # Process image
         response = await client.process_image("camera_output/color_frame.jpg")
+        print(f"type: {type(response)}")
         print(f"Response:\n{response}")
         append_response_to_text_file(response, "response_log.txt")
         new_head_angle = await client.get_head_angle(response)
