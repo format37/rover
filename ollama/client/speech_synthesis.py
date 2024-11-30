@@ -15,16 +15,16 @@ def load_config(config_path: str) -> dict:
         """
         config_file = Path(config_path)
         if config_file.exists():
-            logger.info(f"Loading configuration from {config_path}")
+            # logger.info(f"Loading configuration from {config_path}")
             try:
                 with open(config_file, 'r') as f:
                     config_data = json.load(f)
                 return config_data
             except Exception as e:
-                logger.warning(f"Error loading config: {e}. Using defaults.")
+                # logger.warning(f"Error loading config: {e}. Using defaults.")
                 return None
         else:
-            logger.warning(f"Config file {config_path} not found. Using defaults.")
+            # logger.warning(f"Config file {config_path} not found. Using defaults.")
             return None
 
 def text_to_speech(text, server_url='http://localhost:5000/synthesize', output_file='speech.wav'):
