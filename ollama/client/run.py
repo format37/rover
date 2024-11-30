@@ -45,14 +45,15 @@ async def main():
         print(f"type: {type(response)}")
         print(f"Response:\n{response}")
         append_response_to_text_file(response, "response_log.txt")
-        # new_head_angle = await client.get_head_angle(response)
-        # if new_head_angle is not None:
-        #     print(f"new_head_angle: {new_head_angle}")
-        #     await mech.smooth_head_move(last_head_angle, new_head_angle)
-        #     last_head_angle = new_head_angle
-        # else:
-        #     print("Could not get new_head_angle")
-        break        
+        new_head_angle = await client.get_head_angle(response)
+        if new_head_angle is not None:
+            print(f"new_head_angle: {new_head_angle}")
+            await mech.smooth_head_move(last_head_angle, new_head_angle)
+            last_head_angle = new_head_angle
+        else:
+            print("Could not get new_head_angle")
+        break
+    await mech.smooth_head_move(last_head_angle, 90)
 
 if __name__ == '__main__':
     asyncio.run(main())
