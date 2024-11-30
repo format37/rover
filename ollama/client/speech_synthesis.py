@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional, Dict
+import asyncio
 
 
 class TTSClient:
@@ -144,18 +145,18 @@ class TTSClient:
         return False
 
 
-def main():
+async def main():
     """Example usage of the TTSClient class."""
     # Initialize client with optional config file
     client = TTSClient("config.json")
     
     # Example 1: Synthesize and save
     text = "Hello, this is a test of the text-to-speech system."
-    client.synthesize(text, "test_output.wav")
+    await client.synthesize(text, "test_output.wav")
     
     # Example 2: Synthesize and play immediately
-    client.synthesize_and_play("This text will be synthesized and played immediately.")
+    await client.synthesize_and_play("This text will be synthesized and played immediately.")
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    asyncio.run(main())
