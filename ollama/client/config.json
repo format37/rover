@@ -1,0 +1,7 @@
+{
+    "model": "llava:34b",
+    "api_url": "http://localhost:11434/api/generate",
+    "prompt_path": "prompts/robot_prompt.txt",
+    "timeout": 30.0,
+    "max_response_size": 1048576
+}
