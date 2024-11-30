@@ -15,6 +15,7 @@ class OllamaConfig:
     ollama_api_url: str = "http://localhost:11434/api/generate"
     tts_api_url: str = "http://localhost:5000/synthesize"
     prompt_path: str = "prompts/robot_prompt.txt"
+    audio_device: str = "default"
     timeout: float = 30.0
     max_response_size: int = 1024 * 1024  # 1MB
 
