@@ -166,6 +166,7 @@ Based on your memory and current observation, answer in JSON format:
         
         # Parse and validate final response
         try:
+            self.logger.info(f"model_response:\n{model_response}")
             clean_response = await self.clean_json_response(model_response)
             parsed_response = json.loads(clean_response)
             
