@@ -30,22 +30,23 @@ async def main():
     # await mech.turn_right()
     # await mech.move_backward()
 
-    # try:
-    #     await camera.start()
-    #     await camera.capture_and_save(save_raw=False)
-    # finally:
-    #     await camera.stop()
-
     # Create client
     client = OllamaClient(config_path="config.json")
     last_head_angle = 90
     counter = 0
     while True:
-        # Process image
+        # Capture image
+        try:
+            await camera.start()
+            await camera.capture_and_save(save_raw=False)
+        finally:
+            await camera.stop()
+        # Process image and get response
         response = await client.process_image("camera_output/color_frame.jpg")
         print(f"type: {type(response)}")
         print(f"Response:\n{response}")
         append_response_to_text_file(response, "response_log.txt")
+        # Move head
         new_head_angle = await client.get_head_angle(response)
         if new_head_angle is not None:
             print(f"new_head_angle: {new_head_angle}")
