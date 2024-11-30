@@ -157,6 +157,7 @@ class OllamaClient:
             # return await self.clean_json_response(model_response)
             # return model_response
             json_response = await self.clean_json_response(model_response)
+            print(f"response cleaned: {json_response}")
             return json.loads(json_response)
         except json.JSONDecodeError as e:
             self.logger.error(f"Error parsing final response: {e}")
