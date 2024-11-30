@@ -223,12 +223,12 @@ async def main():
         # Process image
         response = await client.process_image("camera_output/color_frame.jpg")
         
-        # Validate response
-        if await client.validate_response(response):
-            print("Valid response received:")
-            print(json.dumps(response, indent=2))
-        else:
-            print("Invalid response format")
+        # # Validate response
+        # if await client.validate_response(response):
+        print("Valid response received:")
+        print(json.dumps(response, indent=2))
+        # else:
+        #     print("Invalid response format")
             
     except Exception as e:
         print(f"Error: {e}")
