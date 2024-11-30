@@ -1,37 +1,41 @@
-# Goal oriented robot
-The core concept revolves around infinite, sequential JSON prompting that can generate thoughts, speech, and actions through GPT-like models while leveraging Image2Text and STT models for world perception.  
-<p align="center">
-  <img src="https://github.com/format37/rover/blob/master/assets/rover.drawio.png" alt="Concept">
-</p><br>
-<b>Requirements</b><br>
-* <a href="https://github.com/format37/MiniGPT-4">MiniGPT-4</a><br>
-<b>Status</b><br>
-Prototyping<br><br>
-<b>Hardware</b><br>
-Jetson Nano 4GB<br>
-<hr>
-<b>Previous revisions</b>
-<p align="center">
-  <a href="https://youtu.be/f6Nfc5jzEi0">YouTube</a>
-    <img src="https://i9.ytimg.com/vi/f6Nfc5jzEi0/mq1.jpg?sqp=CMjwnYoG&rs=AOn4CLCXwUplQjQcZZcBIdK3yu3a80Qf7w" alt="Realsense tank async depth capture python">
-  </a>
-</p>
-<p align="center">
-  <img src="https://github.com/format37/rover/blob/master/images/back.jpg" alt="back">
-  <img src="https://github.com/format37/rover/blob/master/images/right.jpg" alt="right">
-  <img src="https://github.com/format37/rover/blob/master/images/front.jpg" alt="front">
-</p>
-<b>Settings</b>
-
-To configure CPU and others, go there:
+### Requirements
+* GPU with 22+ Gb of memory for ollama server
+* Python managed Rover with camera as ollama client
+### Server installation
 ```
-sudo nano /etc/nvpmodel.conf
+git clone https://github.com/format37/rover.git
+cd rover/ollama/server
 ```
-### Installation
-* Pyaudio
+* Set ollama server  
+* Config your ollama to be accesible from remote client:
 ```
-sudo apt-get install portaudio19-dev python3-dev python3-pip
-python3 -m pip install pyaudio
+sudo nano /etc/systemd/system/ollama.service
+```
+Add the following line to the file
+```
+Environment="OLLAMA_HOST=0.0.0.0"
+```
+* Restart ollama service
+```
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+* Run ollama server
+```
+sudo systemctl start ollama
+```
+### Client installation
+```
+git clone https://github.com/format37/rover.git
+cd rover/ollama/client
+```
+* Install requirements
+```
+pip install -r requirements.txt
+```
+* Run client
+```
+python client.py
 ```
 ### Realsense camera installation on Jetson nano
 0. Ensure that python3 is installed and defined as default python. I am using 3.8.
