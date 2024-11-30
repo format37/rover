@@ -13,6 +13,7 @@ class OllamaConfig:
     """Configuration for Ollama client"""
     model: str = "llava:34b"
     ollama_api_url: str = "http://localhost:11434/api/generate"
+    tts_api_url: str = "http://localhost:5000/synthesize"
     prompt_path: str = "prompts/robot_prompt.txt"
     timeout: float = 30.0
     max_response_size: int = 1024 * 1024  # 1MB
