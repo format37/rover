@@ -80,7 +80,7 @@ async def main():
                             right_track = 0
                         if "duration" in tracks:
                             duration = tracks["duration"]
-                    await mech.move_tracks(left_track, right_track, duration)
+                        await mech.move_tracks(left_track, right_track, duration)
 
                 # movement = response.get('movement', {})
                 # left_track = movement.get('left_track', {})

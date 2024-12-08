@@ -7,7 +7,7 @@ The available movements are:
     - duration: float (1.0 to 3.0 seconds)
 
 
-Answer in JSON format:
+Answer in STRICTLY in the following JSON format:
 {
     "observations": "<describe what you see>",
     "feelings": "<describe how you feel>",
