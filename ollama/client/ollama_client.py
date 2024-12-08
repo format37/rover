@@ -21,7 +21,7 @@ class OllamaConfig:
     audio_device: str = "default"
     timeout: float = 30.0
     max_response_size: int = 1024 * 1024  # 1MB
-    max_history_size: int = 10  # Maximum number of chat history entries to keep
+    max_history_size: int = 2  # Maximum number of chat history entries to keep
     log_directory: str = "logs"  # Directory for storing request/response logs
 
 class OllamaClient:
