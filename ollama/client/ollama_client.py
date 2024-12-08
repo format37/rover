@@ -59,7 +59,11 @@ class OllamaClient:
                 request_data = await self._request_queue.get()
                 try:
                     async with self._processing_lock:
-                        response = await self._make_api_request(**request_data)
+                        # Only pass the required parameters to _make_api_request
+                        response = await self._make_api_request(
+                            image_path=request_data['image_path'],
+                            prompt=request_data['prompt']
+                        )
                     request_data['future'].set_result(response)
                 except Exception as e:
                     request_data['future'].set_exception(e)
