@@ -176,6 +176,7 @@ class OllamaClient(BaseLLMClient):
                             image_path=request_data['image_path'],
                             prompt=request_data['prompt']
                         )
+                    self.logger.info(f"# Response: {response}")
                     request_data['future'].set_result(response)
                 except Exception as e:
                     request_data['future'].set_exception(e)
