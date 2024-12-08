@@ -259,34 +259,39 @@ class OllamaClient(BaseLLMClient):
         # Convert chat history to formatted string
         history_str = json.dumps(self.chat_history, indent=2) if self.chat_history else "[]"
         
-        # Insert chat history into the base prompt
-        prompt_with_history = f"""You are robot. You can see, speak and move head. You have memory of your past interactions.
-Your chat history is:
+        prompt_with_history = f"""# Your chat history is:
 {history_str}
+# Your system prompt:
+{self.base_prompt_template}"""
 
-The available movements are:
-- Left track: direction (0=forward, 1=backward)
-- Right track: direction (0=forward, 1=backward)
-- Head position: angle 0-180 degrees (0=full left, 90=center, 180=full right)
+        # Insert chat history into the base prompt
+#         prompt_with_history = f"""You are robot. You can see, speak and move head. You have memory of your past interactions.
+# Your chat history is:
+# {history_str}
 
-Based on your memory and current observation, answer in JSON format:
-{{
-    "observations": "<describe what you see>",
-    "feelings": "<describe how you feel, considering your past experiences>",
-    "thoughts": "<describe your thinking process, referencing past events when relevant>",
-    "speech": "<what you want to say, maintaining consistency with past interactions>",
-    "movement": {{
-        "head": {{
-            "angle": <0-180>
-        }},
-        "left_track": {{
-            "direction": <0 or 1>
-        }},
-        "right_track": {{
-            "direction": <0 or 1>
-        }}
-    }}
-}}"""
+# The available movements are:
+# - Left track: direction (0=forward, 1=backward)
+# - Right track: direction (0=forward, 1=backward)
+# - Head position: angle 0-180 degrees (0=full left, 90=center, 180=full right)
+
+# Based on your memory and current observation, answer in JSON format:
+# {{
+#     "observations": "<describe what you see>",
+#     "feelings": "<describe how you feel, considering your past experiences>",
+#     "thoughts": "<describe your thinking process, referencing past events when relevant>",
+#     "speech": "<what you want to say, maintaining consistency with past interactions>",
+#     "movement": {{
+#         "head": {{
+#             "angle": <0-180>
+#         }},
+#         "left_track": {{
+#             "direction": <0 or 1>
+#         }},
+#         "right_track": {{
+#             "direction": <0 or 1>
+#         }}
+#     }}
+# }}"""
         return prompt_with_history
 
 class OpenAIClient(BaseLLMClient):
@@ -304,6 +309,46 @@ class OpenAIClient(BaseLLMClient):
                 filtered_config = self._filter_config_data(config_data, OpenAIConfig)
                 return OpenAIConfig(**filtered_config)
         return OpenAIConfig(model="gpt-4-vision-preview")
+    
+    def _build_prompt_with_history(self) -> str:
+        """Build complete prompt including chat history"""
+        # Convert chat history to formatted string
+        history_str = json.dumps(self.chat_history, indent=2) if self.chat_history else "[]"
+        
+        prompt_with_history = f"""# Your chat history is:
+{history_str}
+# Your system prompt:
+{self.base_prompt_template}"""
+
+#         # Insert chat history into the base prompt
+#         prompt_with_history = f"""You are robot. You can see, speak and move head. You have memory of your past interactions.
+# Your chat history is:
+# {history_str}
+
+# The available movements are:
+# - Left track: direction (0=forward, 1=backward)
+# - Right track: direction (0=forward, 1=backward)
+# - Head position: angle 0-180 degrees (0=full left, 90=center, 180=full right)
+
+# Based on your memory and current observation, answer in JSON format:
+# {{
+#     "observations": "<describe what you see>",
+#     "feelings": "<describe how you feel, considering your past experiences>",
+#     "thoughts": "<describe your thinking process, referencing past events when relevant>",
+#     "speech": "<what you want to say, maintaining consistency with past interactions>",
+#     "movement": {{
+#         "head": {{
+#             "angle": <0-180>
+#         }},
+#         "left_track": {{
+#             "direction": <0 or 1>
+#         }},
+#         "right_track": {{
+#             "direction": <0 or 1>
+#         }}
+#     }}
+# }}"""
+        return prompt_with_history
 
     async def process_image(self, image_path: str, custom_prompt: Optional[str] = None) -> Dict[str, Any]:
         """Process image through OpenAI"""
