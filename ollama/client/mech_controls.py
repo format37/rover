@@ -171,6 +171,22 @@ class RobotController:
         """Center head from current angle"""
         await self.smooth_head_move(current_angle, 90, duration)
 
+    async def move_tracks(self, left_speed: float, right_speed: float, duration: float = 2.0):
+        # Move robot tracks
+        # left_speed: Speed of left track (-1.0 to 1.0)
+        # right_speed: Speed of right track (-1.0 to 1.0)
+        left_direction = 0 if left_speed < 0 else 1
+        right_direction = 0 if right_speed >= 0 else 1
+        left_speed = abs(left_speed * 0.05)
+        right_speed = abs(right_speed * 0.05)
+        await asyncio.gather(
+            self.smooth_track_set(0, left_speed, left_direction),
+            self.smooth_track_set(1, right_speed, right_direction)
+        )
+
+        await asyncio.sleep(duration)
+        await self.stop()
+
     async def move_forward(self, speed: float = 0.05, duration: float = 2.0):
         """Move robot forward"""
         self.logger.info('Moving forward')
@@ -230,10 +246,12 @@ async def main():
     await robot.look_left()
     await robot.look_center(180)
     
-    await robot.move_forward()
-    await robot.turn_left()
-    await robot.turn_right()
-    await robot.move_backward()
+    # await robot.move_forward()
+    # await robot.turn_left()
+    # await robot.turn_right()
+    # await robot.move_backward()
+
+    await robot.move_tracks(0.5, 0.5, 3)
 
 if __name__ == '__main__':
     asyncio.run(main())
