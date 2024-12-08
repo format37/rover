@@ -37,6 +37,9 @@ class OllamaClient:
 
     async def start(self):
         """Start the request processor"""
+        # Set logging level to DEBUG for more detailed output
+        logging.getLogger(__name__).setLevel(logging.DEBUG)
+        
         if self._request_processor_task is None:
             self._request_processor_task = asyncio.create_task(self._process_request_queue())
             self.logger.info("Started Ollama request processor")
@@ -99,28 +102,58 @@ class OllamaClient:
                     )
                 
                 model_response = ""
-                async for line in response.content:
-                    if len(model_response) > self.config.max_response_size:
-                        raise RuntimeError("Response size exceeded limit")
-                        
-                    decoded_line = line.decode('utf-8').strip()
-                    if not decoded_line:
-                        continue
-                        
-                    try:
-                        json_obj = json.loads(decoded_line)
-                        model_response += json_obj.get('response', '')
-                        
-                        if json_obj.get('done', False):
-                            break
-                    except json.JSONDecodeError as e:
-                        self.logger.warning(f"Error parsing response line: {e}")
-                        continue
+                try:
+                    async for line in response.content:
+                        if len(model_response) > self.config.max_response_size:
+                            raise RuntimeError("Response size exceeded limit")
+                            
+                        decoded_line = line.decode('utf-8').strip()
+                        if not decoded_line:
+                            continue
+                            
+                        try:
+                            json_obj = json.loads(decoded_line)
+                            response_chunk = json_obj.get('response', '')
+                            self.logger.debug(f"Received chunk: {response_chunk}")
+                            model_response += response_chunk
+                            
+                            if json_obj.get('done', False):
+                                break
+                        except json.JSONDecodeError as e:
+                            self.logger.warning(f"Error parsing response line: {e}")
+                            self.logger.warning(f"Problematic line: {decoded_line}")
+                            continue
+                            
+                    self.logger.debug(f"Complete raw response:\n{model_response}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Error processing response stream: {e}")
+                    raise
         
         clean_response = await self.clean_json_response(model_response)
         parsed_response = json.loads(clean_response)
         self.update_chat_history(parsed_response)
         return parsed_response
+    
+    async def process_image(self, 
+                          image_path: str,
+                          custom_prompt: Optional[str] = None) -> Dict[str, Any]:
+        """Queue image processing request and wait for result"""
+        # Create a future to get the result
+        future = asyncio.Future()
+        
+        # Prepare request data
+        request_data = {
+            'image_path': image_path,
+            'prompt': custom_prompt or self._build_prompt_with_history(),
+            'future': future
+        }
+        
+        # Queue the request
+        await self._request_queue.put(request_data)
+        
+        # Wait for the result
+        return await future
 
     def _load_config(self, config_path: str) -> OllamaConfig:
         """Load configuration from JSON file"""
@@ -206,26 +239,6 @@ Based on your memory and current observation, answer in JSON format:
         with open(image_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read())
             return encoded_string.decode('utf-8')
-
-    async def process_image(self, 
-                          image_path: str,
-                          custom_prompt: Optional[str] = None) -> Dict[str, Any]:
-        """Queue image processing request and wait for result"""
-        # Create a future to get the result
-        future = asyncio.Future()
-        
-        # Prepare request data
-        request_data = {
-            'image_path': image_path,
-            'prompt': custom_prompt or self._build_prompt_with_history(),
-            'future': future
-        }
-        
-        # Queue the request
-        await self._request_queue.put(request_data)
-        
-        # Wait for the result
-        return await future
 
     async def clean_json_response(self, response: str) -> str:
         """Remove any markdown and comments from JSON response"""
