@@ -27,9 +27,9 @@ async def main():
         stack.push_async_callback(llm_client.stop)
         
         tts_client = TTSClient(config_path="config.json")
-        track_speed = 0.05
+        # track_speed = 0.05
 
-        last_head_angle = 90
+        # last_head_angle = 90
         counter = 0
         # try:
         while True:
@@ -51,38 +51,61 @@ async def main():
                 await tts_client.synthesize_and_play(speech_text)
 
             # Handle head movement
-            if new_head_angle := await llm_client.get_head_angle(response):
-                print(f"new_head_angle: {new_head_angle}")
-                await mech.smooth_head_move(last_head_angle, new_head_angle)
-                last_head_angle = new_head_angle
-                mech.current_head_angle = new_head_angle
+            # if new_head_angle := await llm_client.get_head_angle(response):
+            #     print(f"new_head_angle: {new_head_angle}")
+            #     await mech.smooth_head_move(last_head_angle, new_head_angle)
+            #     last_head_angle = new_head_angle
+            #     mech.current_head_angle = new_head_angle
+            if "movement" in response:
+                if "head" in response["movement"]:
+                    new_head_angle = response["movement"]["head"]
+                    try:
+                        await mech.smooth_head_move(mech.current_head_angle, new_head_angle)
+                        mech.current_head_angle = new_head_angle
+                    except Exception as e:
+                        logging.error(f"Skipping head movement. Error: {e}")
 
             # Handle track movement
             try:
-                movement = response.get('movement', {})
-                left_track = movement.get('left_track', {})
-                right_track = movement.get('right_track', {})
-                
-                if 'duration' in response:
-                    duration = response['duration']
-                else:
-                    duration = 2.0
+                if "movement" in response:
+                    if "tracks" in response["movement"]:
+                        tracks = response["movement"]["tracks"]
+                        if "left_track" in tracks:
+                            left_track = tracks["left_track"]
+                        else:
+                            left_track = 0
+                        if "right_track" in tracks:
+                            right_track = tracks["right_track"]
+                        else:
+                            right_track = 0
+                        if "duration" in tracks:
+                            duration = tracks["duration"]
+                    await mech.move_tracks(left_track, right_track, duration)
 
-                if 'velocity' in left_track:
-                    left_velocity = left_track['velocity']
-                else:
-                    left_velocity = 0.0
-                if 'velocity' in right_track:
-                    right_velocity = right_track['velocity']
-                else:
-                    right_velocity = 0.0
-                if abs(left_velocity) + abs(right_velocity) > 0 and duration > 0:
-                    await mech.move_tracks(left_velocity, right_velocity, duration)
-                else:
-                    logging.info("No track movement required")
+                # movement = response.get('movement', {})
+                # left_track = movement.get('left_track', {})
+                # right_track = movement.get('right_track', {})
+                
+                # if 'duration' in response:
+                #     duration = response['duration']
+                # else:
+                #     duration = 2.0
+
+                # if 'velocity' in left_track:
+                #     left_velocity = left_track['velocity']
+                # else:
+                #     left_velocity = 0.0
+                # if 'velocity' in right_track:
+                #     right_velocity = right_track['velocity']
+                # else:
+                #     right_velocity = 0.0
+                # if abs(left_velocity) + abs(right_velocity) > 0 and duration > 0:
+                #     await mech.move_tracks(left_velocity, right_velocity, duration)
+                # else:
+                #     logging.info("No track movement required")
                     
             except Exception as e:
-                logging.error(f"Skipping track movement due to JSON parse error: {e}")
+                logging.error(f"Skipping track movement. Error: {e}")
 
             counter += 1
             print(f"Counter: {counter}")
