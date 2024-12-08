@@ -186,7 +186,7 @@ class RobotController:
 
         await asyncio.sleep(duration)
         await asyncio.gather(
-            self.smooth_track_stop(0, left_speed, left_direction)
+            self.smooth_track_stop(0, left_speed, left_direction),
             self.smooth_track_stop(1, right_speed, right_direction)
         )
 
