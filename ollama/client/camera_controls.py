@@ -22,6 +22,7 @@ class CameraConfig:
     color_fps: int = 30
     stabilization_frames: int = 30
     depth_scale_alpha: float = 0.03
+    enable_depth: bool = False  # Flag to control depth capture
 
 class CameraController:
     """Controller for RealSense camera operations"""
@@ -34,14 +35,12 @@ class CameraController:
         """Class method to cleanup all active camera instances"""
         for instance in cls._instances:
             try:
-                # Create event loop if necessary
                 try:
                     loop = asyncio.get_event_loop()
                 except RuntimeError:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 
-                # Run the stop method
                 if loop.is_running():
                     loop.create_task(instance._cleanup())
                 else:
@@ -49,15 +48,16 @@ class CameraController:
             except Exception as e:
                 instance.logger.error(f"Error during cleanup: {e}")
 
-    def __init__(self, output_dir: str = '.'):
+    def __init__(self, output_dir: str = '.', enable_depth: bool = False):
         """
         Initialize camera controller
         
         Args:
             output_dir: Directory to save captured images
+            enable_depth: Whether to enable depth capture (default: False)
         """
         self.logger = logging.getLogger(__name__)
-        self.config = CameraConfig()
+        self.config = CameraConfig(enable_depth=enable_depth)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -65,12 +65,14 @@ class CameraController:
         self.pipeline = rs.pipeline()
         self.rs_config = rs.config()
         
-        # Initialize filters
-        self.filters = {
-            'decimation': rs.decimation_filter(),
-            'spatial': rs.spatial_filter(),
-            'temporal': rs.temporal_filter()
-        }
+        # Initialize filters if depth is enabled
+        self.filters = {}
+        if self.config.enable_depth:
+            self.filters = {
+                'decimation': rs.decimation_filter(),
+                'spatial': rs.spatial_filter(),
+                'temporal': rs.temporal_filter()
+            }
         
         self._configure_streams()
         self._is_running = False
@@ -79,7 +81,7 @@ class CameraController:
         self._instances.add(self)
         atexit.register(self.__class__._cleanup_all)
         
-        self.logger.info('Camera controller initialized')
+        self.logger.info(f'Camera controller initialized (depth {"enabled" if enable_depth else "disabled"})')
 
     async def _cleanup(self):
         """Internal cleanup method"""
@@ -92,14 +94,12 @@ class CameraController:
     def __del__(self):
         """Destructor to ensure cleanup when object is garbage collected"""
         try:
-            # Create event loop if necessary
             try:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
             
-            # Run the cleanup
             if loop.is_running():
                 loop.create_task(self._cleanup())
             else:
@@ -118,13 +118,7 @@ class CameraController:
 
     def _configure_streams(self):
         """Configure depth and color streams"""
-        self.rs_config.enable_stream(
-            rs.stream.depth,
-            self.config.depth_width,
-            self.config.depth_height,
-            rs.format.z16,
-            self.config.depth_fps
-        )
+        # Always enable color stream
         self.rs_config.enable_stream(
             rs.stream.color,
             self.config.color_width,
@@ -132,14 +126,27 @@ class CameraController:
             rs.format.bgr8,
             self.config.color_fps
         )
+        
+        # Enable depth stream only if configured
+        if self.config.enable_depth:
+            self.rs_config.enable_stream(
+                rs.stream.depth,
+                self.config.depth_width,
+                self.config.depth_height,
+                rs.format.z16,
+                self.config.depth_fps
+            )
 
     async def start(self) -> None:
         """Start the RealSense pipeline"""
         self.logger.info('Starting camera pipeline')
         self.profile = self.pipeline.start(self.rs_config)
-        self.depth_sensor = self.profile.get_device().first_depth_sensor()
-        self.depth_scale = self.depth_sensor.get_depth_scale()
-        self.align = rs.align(rs.stream.color)
+        
+        if self.config.enable_depth:
+            self.depth_sensor = self.profile.get_device().first_depth_sensor()
+            self.depth_scale = self.depth_sensor.get_depth_scale()
+            self.align = rs.align(rs.stream.color)
+        
         self._is_running = True
         
         # Wait for auto-exposure to stabilize
@@ -155,44 +162,54 @@ class CameraController:
             self.pipeline.stop()
             self._is_running = False
 
-    async def get_frames(self) -> Tuple[np.ndarray, np.ndarray]:
+    async def get_frames(self) -> Tuple[Optional[np.ndarray], np.ndarray]:
         """
         Capture and process a set of frames
         
         Returns:
             Tuple of (depth_image, color_image) as numpy arrays
+            depth_image will be None if depth capture is disabled
         """
         self.logger.info('Capturing frames')
         
         # Get frames
         frames = self.pipeline.wait_for_frames()
-        aligned_frames = self.align.process(frames)
         
-        depth_frame = aligned_frames.get_depth_frame()
-        color_frame = aligned_frames.get_color_frame()
+        # Process depth if enabled
+        depth_image = None
+        if self.config.enable_depth:
+            aligned_frames = self.align.process(frames)
+            depth_frame = aligned_frames.get_depth_frame()
+            color_frame = aligned_frames.get_color_frame()
+            
+            if not depth_frame or not color_frame:
+                raise RuntimeError("Could not acquire frames")
+            
+            # Apply filters to depth
+            filtered_depth = depth_frame
+            for filter_name, filter_obj in self.filters.items():
+                self.logger.debug(f'Applying {filter_name} filter')
+                filtered_depth = filter_obj.process(filtered_depth)
+            
+            depth_image = np.asanyarray(filtered_depth.get_data())
+        else:
+            color_frame = frames.get_color_frame()
+            if not color_frame:
+                raise RuntimeError("Could not acquire color frame")
         
-        if not depth_frame or not color_frame:
-            raise RuntimeError("Could not acquire frames")
-        
-        # Apply filters to depth
-        filtered_depth = depth_frame
-        for filter_name, filter_obj in self.filters.items():
-            self.logger.debug(f'Applying {filter_name} filter')
-            filtered_depth = filter_obj.process(filtered_depth)
-        
-        # Convert to numpy arrays
-        depth_image = np.asanyarray(filtered_depth.get_data())
+        # Convert color frame to numpy array
         color_image = np.asanyarray(color_frame.get_data())
         
         return depth_image, color_image
 
-    async def save_frames(self, depth_image: np.ndarray, color_image: np.ndarray,
+    async def save_frames(self, depth_image: Optional[np.ndarray], 
+                         color_image: np.ndarray,
                          save_raw: bool = False) -> None:
         """
         Save captured frames to files
         
         Args:
-            depth_image: Depth image as numpy array
+            depth_image: Depth image as numpy array (can be None if depth disabled)
             color_image: Color image as numpy array
             save_raw: Whether to save raw numpy arrays
         """
@@ -207,22 +224,24 @@ class CameraController:
         color_pil.save(color_path)
         self.logger.info(f'Saved color image to {color_path}')
         
-        # Save depth visualizations
-        depth_gray_path = self.output_dir / 'depth_frame_gray.png'
-        plt.imsave(depth_gray_path, depth_image, cmap='gray')
-        self.logger.info(f'Saved grayscale depth image to {depth_gray_path}')
-        
-        depth_color_path = self.output_dir / 'depth_frame_colormap.jpg'
-        depth_colormap = cv2.applyColorMap(
-            cv2.convertScaleAbs(depth_image, alpha=self.config.depth_scale_alpha),
-            cv2.COLORMAP_JET
-        )
-        cv2.imwrite(str(depth_color_path), depth_colormap)
-        self.logger.info(f'Saved colormap depth image to {depth_color_path}')
+        # Save depth visualizations if depth is enabled and image is provided
+        if self.config.enable_depth and depth_image is not None:
+            depth_gray_path = self.output_dir / 'depth_frame_gray.png'
+            plt.imsave(depth_gray_path, depth_image, cmap='gray')
+            self.logger.info(f'Saved grayscale depth image to {depth_gray_path}')
+            
+            depth_color_path = self.output_dir / 'depth_frame_colormap.jpg'
+            depth_colormap = cv2.applyColorMap(
+                cv2.convertScaleAbs(depth_image, alpha=self.config.depth_scale_alpha),
+                cv2.COLORMAP_JET
+            )
+            cv2.imwrite(str(depth_color_path), depth_colormap)
+            self.logger.info(f'Saved colormap depth image to {depth_color_path}')
+            
+            if save_raw:
+                np.save(self.output_dir / 'depth_image.npy', depth_image)
         
         if save_raw:
-            # Save raw numpy arrays
-            np.save(self.output_dir / 'depth_image.npy', depth_image)
             np.save(self.output_dir / 'color_image.npy', color_image)
             self.logger.info('Saved raw numpy arrays')
 
@@ -248,17 +267,13 @@ async def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Using context manager (recommended approach)
+    # Example with depth disabled (default)
     async with CameraController(output_dir='camera_output') as camera:
         await camera.capture_and_save(save_raw=False)
-
-    # Alternative approach without context manager
-    camera = CameraController(output_dir='camera_output')
-    try:
-        await camera.start()
-        await camera.capture_and_save(save_raw=False)
-    finally:
-        await camera.stop()
+    
+    # # Example with depth enabled
+    # async with CameraController(output_dir='camera_output_depth', enable_depth=True) as camera:
+    #     await camera.capture_and_save(save_raw=True)
 
 if __name__ == '__main__':
     asyncio.run(main())
