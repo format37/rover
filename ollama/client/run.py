@@ -43,51 +43,51 @@ async def main():
 
             logger.info("Starting main control loop...")
             while True:
-                try:
-                    # Capture image
-                    logger.info(f"Capturing image (iteration {counter + 1}/{max_iterations})")
-                    await camera.capture_and_save(save_raw=False)
-                    
-                    # Process image and get response
-                    logger.info("Processing image with LLM...")
-                    response = await llm_client.process_image("camera_output/color_frame.jpg")
-                    print(f"LLM Response:\n{json.dumps(response, indent=2)}")
-                    
-                    # Save chat history
-                    llm_client.save_chat_history("chat_history.json")
-                    
-                    # Handle speech synthesis
-                    if speech_text := response.get('speech'):
-                        logger.info("Synthesizing speech...")
-                        await tts_client.synthesize_and_play(speech_text)
+                # try:
+                # Capture image
+                logger.info(f"Capturing image (iteration {counter + 1}/{max_iterations})")
+                await camera.capture_and_save(save_raw=False)
+                
+                # Process image and get response
+                logger.info("Processing image with LLM...")
+                response = await llm_client.process_image("camera_output/color_frame.jpg")
+                print(f"LLM Response:\n{json.dumps(response, indent=2)}")
+                
+                # Save chat history
+                llm_client.save_chat_history("chat_history.json")
+                
+                # Handle speech synthesis
+                if speech_text := response.get('speech'):
+                    logger.info("Synthesizing speech...")
+                    await tts_client.synthesize_and_play(speech_text)
 
-                    # Handle head movement
-                    if "movement" in response:
-                        if "head" in response["movement"]:
-                            head_data = response["movement"]["head"]
-                            if isinstance(head_data, dict) and "angle" in head_data:
-                                new_head_angle = head_data["angle"]
-                            else:
-                                new_head_angle = head_data  # For backward compatibility
+                # Handle head movement
+                if "movement" in response:
+                    if "head" in response["movement"]:
+                        head_data = response["movement"]["head"]
+                        if isinstance(head_data, dict) and "angle" in head_data:
+                            new_head_angle = head_data["angle"]
+                        else:
+                            new_head_angle = head_data  # For backward compatibility
+                        
+                        try:
+                            logger.info(f"Moving head to angle: {new_head_angle}")
+                            await mech.smooth_head_move(mech.current_head_angle, new_head_angle)
+                            mech.current_head_angle = new_head_angle
+                        except Exception as e:
+                            logger.error(f"Error during head movement: {e}")
+
+                    # Handle track movement
+                    if "left_track" in response["movement"] and "right_track" in response["movement"]:
+                        try:
+                            left_track = response["movement"]["left_track"].get("direction", 0)
+                            right_track = response["movement"]["right_track"].get("direction", 0)
+                            duration = response["movement"].get("duration", 1.0)  # Default 1 second if not specified
                             
-                            try:
-                                logger.info(f"Moving head to angle: {new_head_angle}")
-                                await mech.smooth_head_move(mech.current_head_angle, new_head_angle)
-                                mech.current_head_angle = new_head_angle
-                            except Exception as e:
-                                logger.error(f"Error during head movement: {e}")
-
-                        # Handle track movement
-                        if "left_track" in response["movement"] and "right_track" in response["movement"]:
-                            try:
-                                left_track = response["movement"]["left_track"].get("direction", 0)
-                                right_track = response["movement"]["right_track"].get("direction", 0)
-                                duration = response["movement"].get("duration", 1.0)  # Default 1 second if not specified
-                                
-                                logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
-                                await mech.move_tracks(left_track, right_track, duration)
-                            except Exception as e:
-                                logger.error(f"Error during track movement: {e}")
+                            logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
+                            await mech.move_tracks(left_track, right_track, duration)
+                        except Exception as e:
+                            logger.error(f"Error during track movement: {e}")
 
                     # Add delay between iterations
                     # logger.info("Waiting for next iteration...")
@@ -98,11 +98,11 @@ async def main():
                         logger.info("Reached maximum iterations, exiting main loop")
                         break
 
-                except Exception as e:
-                    logger.error(f"Error in main loop iteration {counter}: {e}")
-                    # Continue with next iteration despite errors
-                    await asyncio.sleep(1)  # Short delay before retry
-                    continue
+                # except Exception as e:
+                #     logger.error(f"Error in main loop iteration {counter}: {e}")
+                #     # Continue with next iteration despite errors
+                #     await asyncio.sleep(1)  # Short delay before retry
+                #     continue
 
         except Exception as e:
             logger.error(f"Critical error in main function: {e}")
