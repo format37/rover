@@ -50,10 +50,16 @@ async def main():
         except KeyError:
             print("No speech in response")
 
+        # tasks = []
+        if "duration" in response:
+            duration = response['duration']
+        else:
+            duration = 2.0
         # Move head
         new_head_angle = await llm_client.get_head_angle(response)
         if new_head_angle is not None:
             print(f"new_head_angle: {new_head_angle}")
+            # tasks.append(mech.smooth_head_move(last_head_angle, new_head_angle))
             await mech.smooth_head_move(last_head_angle, new_head_angle)
             last_head_angle = new_head_angle
         else:
@@ -63,18 +69,25 @@ async def main():
         left_track_active = False
         right_track_active = False
         if 'left_track' in response:
-            if "direction" in response['left_track']:
-                direction_left = response['left_track']['direction']
+            if "velocity" in response['left_track']:
+                velocity_left = response['left_track']['velocity']
                 left_track_active = True
+            else:
+                velocity_left = 0.0
+            if "duration" in response['left_track']:
+                duration_left = response['left_track']['duration']
+            else:
+                duration_left = 2.0
         if 'right_track' in response:
-            if "direction" in response['right_track']:
-                direction_right = response['right_track']['direction']
-                direction_right = 1 if direction_right == 0 else 0 # Reverse direction
+            if "velocity" in response['right_track']:
+                velocity_right = response['right_track']['velocity']
                 right_track_active = True
+            else:
+                velocity_right = 0.0
+        
         if left_track_active and right_track_active:
             await asyncio.gather(
-                mech.smooth_track_set(0, track_speed, 1),
-                mech.smooth_track_set(1, track_speed, 0)
+                mech.move_tracks(velocity_left, velocity_right, 2)
             )
             await asyncio.sleep(2.0)
             await mech.stop()

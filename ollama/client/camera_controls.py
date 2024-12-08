@@ -8,6 +8,8 @@ import pyrealsense2 as rs
 import cv2
 from PIL import Image
 import matplotlib.pyplot as plt
+import atexit
+import weakref
 
 @dataclass
 class CameraConfig:
@@ -23,6 +25,29 @@ class CameraConfig:
 
 class CameraController:
     """Controller for RealSense camera operations"""
+    
+    # Class-level set to track active instances
+    _instances = weakref.WeakSet()
+    
+    @classmethod
+    def _cleanup_all(cls):
+        """Class method to cleanup all active camera instances"""
+        for instance in cls._instances:
+            try:
+                # Create event loop if necessary
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Run the stop method
+                if loop.is_running():
+                    loop.create_task(instance._cleanup())
+                else:
+                    loop.run_until_complete(instance._cleanup())
+            except Exception as e:
+                instance.logger.error(f"Error during cleanup: {e}")
 
     def __init__(self, output_dir: str = '.'):
         """
@@ -48,7 +73,48 @@ class CameraController:
         }
         
         self._configure_streams()
+        self._is_running = False
+        
+        # Register instance for cleanup
+        self._instances.add(self)
+        atexit.register(self.__class__._cleanup_all)
+        
         self.logger.info('Camera controller initialized')
+
+    async def _cleanup(self):
+        """Internal cleanup method"""
+        if self._is_running:
+            try:
+                await self.stop()
+            except Exception as e:
+                self.logger.error(f"Error during cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup when object is garbage collected"""
+        try:
+            # Create event loop if necessary
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run the cleanup
+            if loop.is_running():
+                loop.create_task(self._cleanup())
+            else:
+                loop.run_until_complete(self._cleanup())
+        except Exception as e:
+            self.logger.error(f"Error during destructor cleanup: {e}")
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        await self._cleanup()
 
     def _configure_streams(self):
         """Configure depth and color streams"""
@@ -74,6 +140,7 @@ class CameraController:
         self.depth_sensor = self.profile.get_device().first_depth_sensor()
         self.depth_scale = self.depth_sensor.get_depth_scale()
         self.align = rs.align(rs.stream.color)
+        self._is_running = True
         
         # Wait for auto-exposure to stabilize
         self.logger.info('Waiting for auto-exposure stabilization')
@@ -83,8 +150,10 @@ class CameraController:
 
     async def stop(self) -> None:
         """Stop the RealSense pipeline"""
-        self.logger.info('Stopping camera pipeline')
-        self.pipeline.stop()
+        if self._is_running:
+            self.logger.info('Stopping camera pipeline')
+            self.pipeline.stop()
+            self._is_running = False
 
     async def get_frames(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -179,7 +248,11 @@ async def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Create and use camera controller
+    # Using context manager (recommended approach)
+    async with CameraController(output_dir='camera_output') as camera:
+        await camera.capture_and_save(save_raw=False)
+
+    # Alternative approach without context manager
     camera = CameraController(output_dir='camera_output')
     try:
         await camera.start()
