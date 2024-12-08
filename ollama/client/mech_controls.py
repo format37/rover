@@ -82,16 +82,23 @@ class RobotController:
     async def _cleanup(self):
         """Internal cleanup method"""
         if self._is_running:
+            self.logger.info("Performing robot cleanup...")
             try:
-                self.logger.info("Performing robot cleanup...")
-                # Stop all tracks
+                # Stop all tracks first
                 await self.stop()
-                # Return head to center position
-                await self.smooth_head_move(self.current_head_angle, 90)
-                self._is_running = False
-                self.logger.info("Robot cleanup completed")
             except Exception as e:
-                self.logger.error(f"Error during cleanup: {e}")
+                self.logger.error(f"Error stopping tracks during cleanup: {e}")
+            
+            try:
+                # Move head to center position in a separate try block
+                if hasattr(self, 'current_head_angle'):
+                    self.logger.info(f"Moving head from {self.current_head_angle}° to 90°")
+                    await self.smooth_head_move(self.current_head_angle, 90)
+            except Exception as e:
+                self.logger.error(f"Error centering head during cleanup: {e}")
+            
+            self._is_running = False
+            self.logger.info("Robot cleanup completed")
 
     def __del__(self):
         """Destructor to ensure cleanup when object is garbage collected"""
