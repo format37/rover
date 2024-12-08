@@ -383,7 +383,9 @@ class OpenAIClient(BaseLLMClient):
             )
             
             response_text = response.choices[0].message.content
-            self.logger.info(f"Response:\n{response_text}")
+            self.logger.info(f"[0] Response:\n{response_text}")
+            response_text = response_text.replace("```json", "").replace("```", "")
+            self.logger.info(f"[1] Response:\n{response_text}")
             response_data = json.loads(response_text)
             response_data["timestamp"] = datetime.now().isoformat()
             response_data["type"] = "response"
