@@ -147,14 +147,14 @@ class CameraController:
             self.depth_scale = self.depth_sensor.get_depth_scale()
             self.align = rs.align(rs.stream.color)
 
-        # RGB quality improvements
-        device = self.profile.get_device()
-        color_sensor = device.query_sensors()[1]  # usually index 1 is color sensor
-        # Enable auto-exposure
-        color_sensor.set_option(rs.option.enable_auto_exposure, 1)
-        # Optionally, tweak exposure compensation if available
+        # # RGB quality improvements
+        # device = self.profile.get_device()
+        # color_sensor = device.query_sensors()[1]  # usually index 1 is color sensor
+        # # Enable auto-exposure
+        # color_sensor.set_option(rs.option.enable_auto_exposure, 1)
+        # # Optionally, tweak exposure compensation if available
         # color_sensor.set_option(rs.option.exposure, some_exposure_value)
-        # Adjust gain if automatic settings are not ideal
+        # # Adjust gain if automatic settings are not ideal
         # color_sensor.set_option(rs.option.gain, 16)
         
         self._is_running = True

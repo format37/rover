@@ -20,83 +20,85 @@ async def main():
     )
     # Initialize motoric and sensory controllers
     mech = RobotController()
-    camera = CameraController(output_dir='camera_output')
-    await camera.start()
-    llm_client = OllamaClient(config_path="config.json")
-    tts_client = TTSClient(config_path="config.json")
-    track_speed = 0.05
+
+    async with CameraController(output_dir='camera_output') as camera:
+        # camera = CameraController(output_dir='camera_output')
+        # await camera.start()
+        llm_client = OllamaClient(config_path="config.json")
+        tts_client = TTSClient(config_path="config.json")
+        track_speed = 0.05
 
 
-    last_head_angle = 90
-    counter = 0
-    while True:
-        
-        # Capture image
-        await camera.capture_and_save(save_raw=False)
-        
-        # Process image and get response
-        response = await llm_client.process_image("camera_output/color_frame.jpg")
-        print(f"type: {type(response)}")
-        print(f"Response:\n{response}")
-        # append_response_to_text_file(response, "response_log.txt")
-        # Save chat history
-        llm_client.save_chat_history("chat_history.json")
-        
-        # Pronounce speech from response
-        try:
-            text_to_speech = response['speech']
-            if len(text_to_speech):
-                await tts_client.synthesize_and_play(text_to_speech)
-        except KeyError:
-            print("No speech in response")
+        last_head_angle = 90
+        counter = 0
+        while True:
+            
+            # Capture image
+            await camera.capture_and_save(save_raw=False)
+            
+            # Process image and get response
+            response = await llm_client.process_image("camera_output/color_frame.jpg")
+            print(f"type: {type(response)}")
+            print(f"Response:\n{response}")
+            # append_response_to_text_file(response, "response_log.txt")
+            # Save chat history
+            llm_client.save_chat_history("chat_history.json")
+            
+            # Pronounce speech from response
+            try:
+                text_to_speech = response['speech']
+                if len(text_to_speech):
+                    await tts_client.synthesize_and_play(text_to_speech)
+            except KeyError:
+                print("No speech in response")
 
-        # tasks = []
-        if "duration" in response:
-            duration = response['duration']
-        else:
-            duration = 2.0
-        # Move head
-        new_head_angle = await llm_client.get_head_angle(response)
-        if new_head_angle is not None:
-            print(f"new_head_angle: {new_head_angle}")
-            # tasks.append(mech.smooth_head_move(last_head_angle, new_head_angle))
-            await mech.smooth_head_move(last_head_angle, new_head_angle)
-            last_head_angle = new_head_angle
-        else:
-            print("Could not get new_head_angle")
-
-        # Move tracks
-        left_track_active = False
-        right_track_active = False
-        if 'left_track' in response:
-            if "velocity" in response['left_track']:
-                velocity_left = response['left_track']['velocity']
-                left_track_active = True
+            # tasks = []
+            if "duration" in response:
+                duration = response['duration']
             else:
-                velocity_left = 0.0
-            if "duration" in response['left_track']:
-                duration_left = response['left_track']['duration']
+                duration = 2.0
+            # Move head
+            new_head_angle = await llm_client.get_head_angle(response)
+            if new_head_angle is not None:
+                print(f"new_head_angle: {new_head_angle}")
+                # tasks.append(mech.smooth_head_move(last_head_angle, new_head_angle))
+                await mech.smooth_head_move(last_head_angle, new_head_angle)
+                last_head_angle = new_head_angle
             else:
-                duration_left = 2.0
-        if 'right_track' in response:
-            if "velocity" in response['right_track']:
-                velocity_right = response['right_track']['velocity']
-                right_track_active = True
-            else:
-                velocity_right = 0.0
-        
-        if left_track_active and right_track_active:
-            await asyncio.gather(
-                mech.move_tracks(velocity_left, velocity_right, 2)
-            )
-            await asyncio.sleep(2.0)
-            await mech.stop()
+                print("Could not get new_head_angle")
 
-        counter += 1
-        if counter >= 5:
-            break
-    await camera.stop()
-    await mech.smooth_head_move(last_head_angle, 90)
+            # Move tracks
+            left_track_active = False
+            right_track_active = False
+            if 'left_track' in response:
+                if "velocity" in response['left_track']:
+                    velocity_left = response['left_track']['velocity']
+                    left_track_active = True
+                else:
+                    velocity_left = 0.0
+                if "duration" in response['left_track']:
+                    duration_left = response['left_track']['duration']
+                else:
+                    duration_left = 2.0
+            if 'right_track' in response:
+                if "velocity" in response['right_track']:
+                    velocity_right = response['right_track']['velocity']
+                    right_track_active = True
+                else:
+                    velocity_right = 0.0
+            
+            if left_track_active and right_track_active:
+                await asyncio.gather(
+                    mech.move_tracks(velocity_left, velocity_right, 2)
+                )
+                await asyncio.sleep(2.0)
+                await mech.stop()
+
+            counter += 1
+            if counter >= 5:
+                break
+        await camera.stop()
+        await mech.smooth_head_move(last_head_angle, 90)
 
 if __name__ == '__main__':
     asyncio.run(main())
