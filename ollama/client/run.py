@@ -77,17 +77,28 @@ async def main():
                         except Exception as e:
                             logger.error(f"Error during head movement: {e}")
 
-                    # Handle track movement
-                    if "left_track" in response["movement"] and "right_track" in response["movement"]:
-                        try:
-                            left_track = response["movement"]["left_track"].get("direction", 0)
-                            right_track = response["movement"]["right_track"].get("direction", 0)
-                            duration = response["movement"].get("duration", 1.0)  # Default 1 second if not specified
+                    tracks = response["movement"]["tracks"]        
+                    left_track = tracks.get("left_track", 0)    
+                    right_track = tracks.get("right_track", 0)                        
+                    duration = tracks.get("duration", 1.0)                    
+                    if left_track != 0 or right_track != 0:
+                        logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
+                        await mech.move_tracks(left_track, right_track, duration)
+                    else:
+                        logger.debug("Skipping track movement as both tracks are set to 0")
+                        
+
+                    # # Handle track movement
+                    # if "left_track" in response["movement"] and "right_track" in response["movement"]:
+                    #     try:
+                    #         left_track = response["movement"]["left_track"].get("direction", 0)
+                    #         right_track = response["movement"]["right_track"].get("direction", 0)
+                    #         duration = response["movement"].get("duration", 1.0)  # Default 1 second if not specified
                             
-                            logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
-                            await mech.move_tracks(left_track, right_track, duration)
-                        except Exception as e:
-                            logger.error(f"Error during track movement: {e}")
+                    #         logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
+                    #         await mech.move_tracks(left_track, right_track, duration)
+                    #     except Exception as e:
+                    #         logger.error(f"Error during track movement: {e}")
 
                     # Add delay between iterations
                     # logger.info("Waiting for next iteration...")
