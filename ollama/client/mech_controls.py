@@ -2,6 +2,8 @@ import logging
 import time
 import math
 import asyncio
+import weakref
+import atexit
 from typing import Optional, Tuple
 from dataclasses import dataclass
 from adafruit_servokit import ServoKit
@@ -21,20 +23,33 @@ class TrackConfig:
 class RobotController:
     """Unified controller for robot's head servo and tracks"""
     
+    # Class-level set to track active instances
+    _instances = weakref.WeakSet()
+    
+    @classmethod
+    def _cleanup_all(cls):
+        """Class method to cleanup all active robot instances"""
+        for instance in cls._instances:
+            try:
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                if loop.is_running():
+                    loop.create_task(instance._cleanup())
+                else:
+                    loop.run_until_complete(instance._cleanup())
+            except Exception as e:
+                instance.logger.error(f"Error during cleanup: {e}")
+    
     def __init__(self, 
                  servo_channels: int = 16,
                  servo_address: int = 0x42,
                  track_addresses: Tuple[int, int] = (0x40, 0x41),
                  head_servo_channel: int = 0):
-        """
-        Initialize robot controller
-        
-        Args:
-            servo_channels: Number of servo channels
-            servo_address: I2C address for servo controller
-            track_addresses: Tuple of I2C addresses for left and right track controllers
-            head_servo_channel: Channel number for head servo
-        """
+        """Initialize robot controller"""
         self.logger = logging.getLogger(__name__)
         self.track_config = TrackConfig()
         
@@ -55,6 +70,52 @@ class RobotController:
             controller.frequency = self.track_config.min_frequency
             controller.channels[0].duty_cycle = 0
             controller.channels[1].duty_cycle = self.track_config.forward_duty
+            
+        # Store current head angle
+        self.current_head_angle = 90
+        self._is_running = True
+        
+        # Register instance for cleanup
+        self._instances.add(self)
+        atexit.register(self.__class__._cleanup_all)
+
+    async def _cleanup(self):
+        """Internal cleanup method"""
+        if self._is_running:
+            try:
+                self.logger.info("Performing robot cleanup...")
+                # Stop all tracks
+                await self.stop()
+                # Return head to center position
+                await self.smooth_head_move(self.current_head_angle, 90)
+                self._is_running = False
+                self.logger.info("Robot cleanup completed")
+            except Exception as e:
+                self.logger.error(f"Error during cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup when object is garbage collected"""
+        try:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            if loop.is_running():
+                loop.create_task(self._cleanup())
+            else:
+                loop.run_until_complete(self._cleanup())
+        except Exception as e:
+            self.logger.error(f"Error during destructor cleanup: {e}")
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        await self._cleanup()
 
     async def smooth_head_move(self, 
                              start_angle: float, 
@@ -243,16 +304,11 @@ async def main():
     logging.basicConfig(level=logging.INFO)
     robot = RobotController()
     
-    # # Example movement sequence
-    # await robot.look_right()
-    # await robot.look_center(0)
-    # await robot.look_left()
-    # await robot.look_center(180)
-    
-    # await robot.move_forward()
-    # await robot.turn_left()
-    # await robot.turn_right()
-    # await robot.move_backward()
+    # Example movement sequence
+    await robot.look_right()
+    await robot.look_center(0)
+    await robot.look_left()
+    await robot.look_center(180)
 
     await robot.move_tracks(1, 1, 2)
     await robot.move_tracks(-1, -1, 2)
