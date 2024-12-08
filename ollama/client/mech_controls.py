@@ -177,8 +177,8 @@ class RobotController:
         # right_speed: Speed of right track (-1.0 to 1.0)
         left_direction = 0 if left_speed >= 0 else 1
         right_direction = 0 if right_speed < 0 else 1
-        left_speed = abs(left_speed * 0.5)
-        right_speed = abs(right_speed * 0.5)
+        left_speed = abs(left_speed * 0.1)
+        right_speed = abs(right_speed * 0.1)
         await asyncio.gather(
             self.smooth_track_set(0, left_speed, left_direction),
             self.smooth_track_set(1, right_speed, right_direction)
