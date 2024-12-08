@@ -177,8 +177,8 @@ class RobotController:
         # right_speed: Speed of right track (-1.0 to 1.0)
         left_direction = 0 if left_speed >= 0 else 1
         right_direction = 0 if right_speed < 0 else 1
-        left_speed = abs(left_speed * 0.1)
-        right_speed = abs(right_speed * 0.1)
+        left_speed = abs(left_speed * 0.5)
+        right_speed = abs(right_speed * 0.5)
         await asyncio.gather(
             self.smooth_track_set(0, left_speed, left_direction),
             self.smooth_track_set(1, right_speed, right_direction)
@@ -230,12 +230,12 @@ class RobotController:
         await asyncio.sleep(duration)
         await self.stop()
 
-    async def stop(self):
+    async def stop(self, speed: float = 0.05):
         """Stop all tracks"""
         self.logger.info('Stopping')
         await asyncio.gather(
-            self.smooth_track_stop(0, 0.05, 1),
-            self.smooth_track_stop(1, 0.05, 0)
+            self.smooth_track_stop(0, speed, 1),
+            self.smooth_track_stop(1, speed, 0)
         )
 
 # Example usage
@@ -243,11 +243,11 @@ async def main():
     logging.basicConfig(level=logging.INFO)
     robot = RobotController()
     
-    # Example movement sequence
-    await robot.look_right()
-    await robot.look_center(0)
-    await robot.look_left()
-    await robot.look_center(180)
+    # # Example movement sequence
+    # await robot.look_right()
+    # await robot.look_center(0)
+    # await robot.look_left()
+    # await robot.look_center(180)
     
     # await robot.move_forward()
     # await robot.turn_left()
