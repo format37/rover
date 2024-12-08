@@ -22,14 +22,101 @@ class OllamaConfig:
     max_history_size: int = 10  # Maximum number of chat history entries to keep
 
 class OllamaClient:
-    """Async client for Ollama API interactions with chat history support"""
+    """Async client for Ollama API interactions with chat history support and request queue"""
 
     def __init__(self, config_path: str = "config.json"):
-        """Initialize Ollama client with chat history support"""
+        """Initialize Ollama client with chat history support and request queue"""
         self.logger = logging.getLogger(__name__)
         self.config = self._load_config(config_path)
         self.base_prompt_template = self._load_prompt_template()
         self.chat_history = []
+        # Add request queue and lock
+        self._request_queue = asyncio.Queue()
+        self._processing_lock = asyncio.Lock()
+        self._request_processor_task = None
+
+    async def start(self):
+        """Start the request processor"""
+        if self._request_processor_task is None:
+            self._request_processor_task = asyncio.create_task(self._process_request_queue())
+            self.logger.info("Started Ollama request processor")
+
+    async def stop(self):
+        """Stop the request processor"""
+        if self._request_processor_task:
+            self._request_processor_task.cancel()
+            try:
+                await self._request_processor_task
+            except asyncio.CancelledError:
+                pass
+            self._request_processor_task = None
+            self.logger.info("Stopped Ollama request processor")
+
+    async def _process_request_queue(self):
+        """Process requests from the queue one at a time"""
+        while True:
+            try:
+                request_data = await self._request_queue.get()
+                try:
+                    async with self._processing_lock:
+                        response = await self._make_api_request(**request_data)
+                    request_data['future'].set_result(response)
+                except Exception as e:
+                    request_data['future'].set_exception(e)
+                finally:
+                    self._request_queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Error processing request: {e}")
+                continue
+
+    async def _make_api_request(self, image_path: str, prompt: str) -> Dict[str, Any]:
+        """Make the actual API request to Ollama"""
+        image_base64 = await self.encode_image(image_path)
+        
+        payload = {
+            "model": self.config.model,
+            "prompt": prompt,
+            "images": [image_base64]
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            self.logger.info(f"Sending request to Ollama API for {image_path}")
+            async with session.post(
+                self.config.ollama_api_url,
+                json=payload,
+                timeout=self.config.timeout
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise RuntimeError(
+                        f"API request failed with status {response.status}: {error_text}"
+                    )
+                
+                model_response = ""
+                async for line in response.content:
+                    if len(model_response) > self.config.max_response_size:
+                        raise RuntimeError("Response size exceeded limit")
+                        
+                    decoded_line = line.decode('utf-8').strip()
+                    if not decoded_line:
+                        continue
+                        
+                    try:
+                        json_obj = json.loads(decoded_line)
+                        model_response += json_obj.get('response', '')
+                        
+                        if json_obj.get('done', False):
+                            break
+                    except json.JSONDecodeError as e:
+                        self.logger.warning(f"Error parsing response line: {e}")
+                        continue
+        
+        clean_response = await self.clean_json_response(model_response)
+        parsed_response = json.loads(clean_response)
+        self.update_chat_history(parsed_response)
+        return parsed_response
 
     def _load_config(self, config_path: str) -> OllamaConfig:
         """Load configuration from JSON file"""
@@ -119,67 +206,22 @@ Based on your memory and current observation, answer in JSON format:
     async def process_image(self, 
                           image_path: str,
                           custom_prompt: Optional[str] = None) -> Dict[str, Any]:
-        """Process image through Ollama API with chat history"""
-        # Encode image
-        image_base64 = await self.encode_image(image_path)
-
-        print(f"# prompt:\n{custom_prompt or self._build_prompt_with_history()}")
+        """Queue image processing request and wait for result"""
+        # Create a future to get the result
+        future = asyncio.Future()
         
-        # Prepare request payload using prompt with history
-        payload = {
-            "model": self.config.model,
-            "prompt": custom_prompt or self._build_prompt_with_history(),
-            "images": [image_base64]
+        # Prepare request data
+        request_data = {
+            'image_path': image_path,
+            'prompt': custom_prompt or self._build_prompt_with_history(),
+            'future': future
         }
         
-        # Make API request
-        async with aiohttp.ClientSession() as session:
-            logging.info(f"Sending {image_path} to {self.config.ollama_api_url}")
-            async with session.post(
-                self.config.ollama_api_url,
-                json=payload,
-                timeout=self.config.timeout
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise RuntimeError(
-                        f"API request failed with status {response.status}: {error_text}"
-                    )
-                
-                # Process streaming response
-                model_response = ""
-                async for line in response.content:
-                    if len(model_response) > self.config.max_response_size:
-                        raise RuntimeError("Response size exceeded limit")
-                        
-                    decoded_line = line.decode('utf-8').strip()
-                    if not decoded_line:
-                        continue
-                        
-                    try:
-                        json_obj = json.loads(decoded_line)
-                        model_response += json_obj.get('response', '')
-                        
-                        if json_obj.get('done', False):
-                            break
-                    except json.JSONDecodeError as e:
-                        self.logger.warning(f"Error parsing response line: {e}")
-                        continue
+        # Queue the request
+        await self._request_queue.put(request_data)
         
-        # Parse and validate final response
-        try:
-            self.logger.info(f"model_response:\n{model_response}")
-            clean_response = await self.clean_json_response(model_response)
-            parsed_response = json.loads(clean_response)
-            
-            # Update chat history with new response
-            self.update_chat_history(parsed_response)
-            
-            return parsed_response
-            
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Error parsing final response: {e}")
-            raise ValueError(f"Invalid JSON response: {model_response}")
+        # Wait for the result
+        return await future
 
     async def clean_json_response(self, response: str) -> str:
         """Remove any markdown and comments from JSON response"""
