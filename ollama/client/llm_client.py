@@ -56,6 +56,12 @@ class BaseLLMClient(ABC):
         """Load configuration from file"""
         pass
 
+    def _filter_config_data(self, config_data: Dict[str, Any], config_class: type) -> Dict[str, Any]:
+        """Filter configuration data to only include fields defined in the config class"""
+        from dataclasses import fields
+        valid_fields = {field.name for field in fields(config_class)}
+        return {k: v for k, v in config_data.items() if k in valid_fields}
+
     async def encode_image(self, image_path: str) -> str:
         """Encode image to base64"""
         async with aiofiles.open(image_path, "rb") as image_file:
@@ -130,7 +136,8 @@ class OllamaClient(BaseLLMClient):
         if config_file.exists():
             with open(config_file, 'r') as f:
                 config_data = json.load(f)
-                return OllamaConfig(**config_data)
+                filtered_config = self._filter_config_data(config_data, OllamaConfig)
+                return OllamaConfig(**filtered_config)
         return OllamaConfig(model="llava:34b")
 
     async def start(self):
@@ -259,7 +266,8 @@ class OpenAIClient(BaseLLMClient):
         if config_file.exists():
             with open(config_file, 'r') as f:
                 config_data = json.load(f)
-                return OpenAIConfig(**config_data)
+                filtered_config = self._filter_config_data(config_data, OpenAIConfig)
+                return OpenAIConfig(**filtered_config)
         return OpenAIConfig(model="gpt-4-vision-preview")
 
     async def process_image(self, image_path: str, custom_prompt: Optional[str] = None) -> Dict[str, Any]:
@@ -324,14 +332,14 @@ class OpenAIClient(BaseLLMClient):
 
 def create_llm_client(config_path: str = "config.json", client_type: Optional[str] = None) -> BaseLLMClient:
     """Factory function to create appropriate LLM client"""
-    if client_type is None:
-        # Try to determine from config file
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            if client_type is None:
                 client_type = config.get('client_type', 'ollama')
-        except Exception:
-            client_type = 'ollama'  # Default to Ollama
+    except Exception as e:
+        logging.warning(f"Error reading config file: {e}. Using default client type.")
+        client_type = client_type or 'ollama'
     
     if client_type.lower() == 'openai':
         return OpenAIClient(config_path)

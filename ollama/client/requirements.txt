@@ -10,3 +10,4 @@ aiohttp==3.10.11
 aiofiles==24.1.0
 pyttsx3==2.98
 PyAudio==0.2.14
+openai==1.57.0
