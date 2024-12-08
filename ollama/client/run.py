@@ -43,6 +43,9 @@ async def main():
                 # Save chat history
                 llm_client.save_chat_history("chat_history.json")
                 
+                # Add delay to ensure previous request is fully completed
+                await asyncio.sleep(15)  # 15 second delay between requests
+                
                 # Handle speech synthesis
                 if speech_text := response.get('speech'):
                     await tts_client.synthesize_and_play(speech_text)

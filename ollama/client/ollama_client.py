@@ -2,12 +2,14 @@ import logging
 import json
 import base64
 import aiohttp
+import aiofiles
 import asyncio
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 import re
 from collections import deque
+from datetime import datetime
 
 @dataclass
 class OllamaConfig:
@@ -20,6 +22,7 @@ class OllamaConfig:
     timeout: float = 30.0
     max_response_size: int = 1024 * 1024  # 1MB
     max_history_size: int = 10  # Maximum number of chat history entries to keep
+    log_directory: str = "logs"  # Directory for storing request/response logs
 
 class OllamaClient:
     """Async client for Ollama API interactions with chat history support and request queue"""
@@ -30,10 +33,35 @@ class OllamaClient:
         self.config = self._load_config(config_path)
         self.base_prompt_template = self._load_prompt_template()
         self.chat_history = []
-        # Add request queue and lock
         self._request_queue = asyncio.Queue()
         self._processing_lock = asyncio.Lock()
         self._request_processor_task = None
+        
+        # Create logs directory if it doesn't exist
+        self.log_dir = Path(self.config.log_directory)
+        self.log_dir.mkdir(exist_ok=True)
+
+    async def _log_interaction(self, request_data: Dict[str, Any], response_data: Dict[str, Any], image_path: str):
+        """Log request and response data to a timestamped JSON file"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        log_entry = {
+            "timestamp": timestamp,
+            "image_path": image_path,
+            "request": {
+                "prompt": request_data.get('prompt'),
+                "model": self.config.model
+            },
+            "response": response_data,
+            "chat_history_length": len(self.chat_history)
+        }
+        
+        log_file = self.log_dir / f"interaction_{timestamp}.json"
+        try:
+            async with aiofiles.open(log_file, 'w') as f:
+                await f.write(json.dumps(log_entry, indent=2))
+            self.logger.info(f"Interaction logged to {log_file}")
+        except Exception as e:
+            self.logger.error(f"Error logging interaction: {e}")
 
     async def start(self):
         """Start the request processor"""
@@ -79,62 +107,109 @@ class OllamaClient:
                 continue
 
     async def _make_api_request(self, image_path: str, prompt: str) -> Dict[str, Any]:
-        """Make the actual API request to Ollama"""
+        """Make the actual API request to Ollama with logging"""
         image_base64 = await self.encode_image(image_path)
         
-        payload = {
+        request_data = {
             "model": self.config.model,
             "prompt": prompt,
             "images": [image_base64]
         }
         
-        async with aiohttp.ClientSession() as session:
-            self.logger.info(f"Sending request to Ollama API for {image_path}")
-            async with session.post(
-                self.config.ollama_api_url,
-                json=payload,
-                timeout=self.config.timeout
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise RuntimeError(
-                        f"API request failed with status {response.status}: {error_text}"
-                    )
-                
-                model_response = ""
-                try:
-                    async for line in response.content:
-                        if len(model_response) > self.config.max_response_size:
-                            raise RuntimeError("Response size exceeded limit")
-                            
-                        decoded_line = line.decode('utf-8').strip()
-                        if not decoded_line:
-                            continue
-                            
-                        try:
-                            json_obj = json.loads(decoded_line)
-                            response_chunk = json_obj.get('response', '')
-                            self.logger.debug(f"Received chunk: {response_chunk}")
-                            model_response += response_chunk
-                            
-                            if json_obj.get('done', False):
-                                break
-                        except json.JSONDecodeError as e:
-                            self.logger.warning(f"Error parsing response line: {e}")
-                            self.logger.warning(f"Problematic line: {decoded_line}")
-                            continue
-                            
-                    self.logger.debug(f"Complete raw response:\n{model_response}")
+        response_data = None
+        try:
+            async with aiohttp.ClientSession() as session:
+                self.logger.info(f"Sending request to Ollama API for {image_path}")
+                async with session.post(
+                    self.config.ollama_api_url,
+                    json=request_data,
+                    timeout=self.config.timeout
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise RuntimeError(
+                            f"API request failed with status {response.status}: {error_text}"
+                        )
                     
-                except Exception as e:
-                    self.logger.error(f"Error processing response stream: {e}")
-                    raise
-        
-        clean_response = await self.clean_json_response(model_response)
-        parsed_response = json.loads(clean_response)
-        self.update_chat_history(parsed_response)
-        return parsed_response
+                    model_response = ""
+                    try:
+                        async for line in response.content:
+                            if len(model_response) > self.config.max_response_size:
+                                raise RuntimeError("Response size exceeded limit")
+                                
+                            decoded_line = line.decode('utf-8').strip()
+                            if not decoded_line:
+                                continue
+                                
+                            try:
+                                json_obj = json.loads(decoded_line)
+                                response_chunk = json_obj.get('response', '')
+                                self.logger.debug(f"Received chunk: {response_chunk}")
+                                model_response += response_chunk
+                                
+                                if json_obj.get('done', False):
+                                    break
+                            except json.JSONDecodeError as e:
+                                self.logger.warning(f"Error parsing response line: {e}")
+                                self.logger.warning(f"Problematic line: {decoded_line}")
+                                continue
+                                
+                        self.logger.debug(f"Complete raw response:\n{model_response}")
+                        
+                    except Exception as e:
+                        self.logger.error(f"Error processing response stream: {e}")
+                        raise
+
+            clean_response = await self.clean_json_response(model_response)
+            response_data = json.loads(clean_response)
+            
+            # Log the interaction
+            await self._log_interaction(request_data, response_data, image_path)
+            
+            self.update_chat_history(response_data)
+            return response_data
+            
+        except Exception as e:
+            self.logger.error(f"Error in API request: {e}")
+            # Log failed interaction
+            await self._log_interaction(
+                request_data,
+                {"error": str(e), "status": "failed"},
+                image_path
+            )
+            raise
     
+    async def get_log_summary(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
+        """Generate a summary of logged interactions within the specified date range"""
+        logs = []
+        try:
+            for log_file in self.log_dir.glob("interaction_*.json"):
+                # Extract date from filename
+                file_date = log_file.stem.split('_')[1]
+                
+                if start_date and file_date < start_date:
+                    continue
+                if end_date and file_date > end_date:
+                    continue
+                    
+                async with aiofiles.open(log_file, 'r') as f:
+                    content = await f.read()
+                    logs.append(json.loads(content))
+            
+            return {
+                "total_interactions": len(logs),
+                "date_range": {
+                    "start": start_date or "all",
+                    "end": end_date or "all"
+                },
+                "success_rate": sum(1 for log in logs if "error" not in log["response"]) / len(logs) if logs else 0,
+                "average_history_length": sum(log["chat_history_length"] for log in logs) / len(logs) if logs else 0
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error generating log summary: {e}")
+            return {"error": str(e)}
+
     async def process_image(self, 
                           image_path: str,
                           custom_prompt: Optional[str] = None) -> Dict[str, Any]:
