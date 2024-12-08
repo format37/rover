@@ -254,7 +254,10 @@ async def main():
     # await robot.turn_right()
     # await robot.move_backward()
 
-    await robot.move_tracks(0.5, 0.5, 3)
+    await robot.move_tracks(1, 1, 2)
+    await robot.move_tracks(-1, -1, 2)
+    await robot.move_tracks(1, -1, 2)
+    await robot.move_tracks(-1, 1, 2)
 
 if __name__ == '__main__':
     asyncio.run(main())
