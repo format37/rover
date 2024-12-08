@@ -74,6 +74,9 @@ class RobotController:
         # Store current head angle
         self.current_head_angle = 90
         self._is_running = True
+
+        # Move head to the initial center position
+        self.head_servo.angle = self.current_head_angle
         
         # Register instance for cleanup
         self._instances.add(self)

@@ -32,7 +32,7 @@ class OllamaClient:
         self.logger = logging.getLogger(__name__)
         self.config = self._load_config(config_path)
         self.base_prompt_template = self._load_prompt_template()
-        self.chat_history = []
+        self.chat_history = []  # Will store both requests and responses
         self._request_queue = asyncio.Queue()
         self._processing_lock = asyncio.Lock()
         self._request_processor_task = None
@@ -49,7 +49,8 @@ class OllamaClient:
             "image_path": image_path,
             "request": {
                 "prompt": request_data.get('prompt'),
-                "model": self.config.model
+                "model": self.config.model,
+                "images": ["<base64_image_data_omitted>"]  # Don't log the actual image data
             },
             "response": response_data,
             "chat_history_length": len(self.chat_history)
@@ -116,6 +117,15 @@ class OllamaClient:
             "images": [image_base64]
         }
         
+        # Create a request entry for chat history (without the base64 image data)
+        request_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "type": "request",
+            "image_path": image_path,
+            "prompt": prompt,
+            "model": self.config.model
+        }
+        
         response_data = None
         try:
             async with aiohttp.ClientSession() as session:
@@ -163,18 +173,31 @@ class OllamaClient:
             clean_response = await self.clean_json_response(model_response)
             response_data = json.loads(clean_response)
             
+            # Add timestamp to response data
+            response_data["timestamp"] = datetime.now().isoformat()
+            response_data["type"] = "response"
+            
             # Log the interaction
             await self._log_interaction(request_data, response_data, image_path)
             
-            self.update_chat_history(response_data)
+            # Update chat history with both request and response
+            self.update_chat_history(request_entry, response_data)
             return response_data
             
         except Exception as e:
             self.logger.error(f"Error in API request: {e}")
+            error_response = {
+                "timestamp": datetime.now().isoformat(),
+                "type": "response",
+                "error": str(e),
+                "status": "failed"
+            }
+            # Still update chat history with request and error response
+            self.update_chat_history(request_entry, error_response)
             # Log failed interaction
             await self._log_interaction(
                 request_data,
-                {"error": str(e), "status": "failed"},
+                error_response,
                 image_path
             )
             raise
@@ -291,23 +314,15 @@ Based on your memory and current observation, answer in JSON format:
 }}"""
         return prompt_with_history
 
-    def update_chat_history(self, response: Dict[str, Any]):
-        """Update chat history with new response while maintaining size limit"""
-        # Create history entry with relevant fields
-        history_entry = {
-            "observations": response.get("observations", ""),
-            "feelings": response.get("feelings", ""),
-            "thoughts": response.get("thoughts", ""),
-            "speech": response.get("speech", ""),
-            "movement": response.get("movement", {})
-        }
+    def update_chat_history(self, request: Dict[str, Any], response: Dict[str, Any]):
+        """Update chat history with new request and response while maintaining size limit"""
+        # Add request and response entries
+        self.chat_history.extend([request, response])
         
-        # Add new entry to history
-        self.chat_history.append(history_entry)
-        
-        # Trim history if it exceeds max size
-        if len(self.chat_history) > self.config.max_history_size:
-            self.chat_history = self.chat_history[-self.config.max_history_size:]
+        # Trim history if it exceeds max size, keeping pairs of entries
+        max_entries = self.config.max_history_size * 2  # Double size to account for request-response pairs
+        if len(self.chat_history) > max_entries:
+            self.chat_history = self.chat_history[-max_entries:]
 
     async def encode_image(self, image_path: str) -> str:
         """Encodes an image file to a base64 string."""
@@ -344,16 +359,22 @@ Based on your memory and current observation, answer in JSON format:
         """Save chat history to a JSON file"""
         try:
             with open(filepath, 'w') as f:
-                json.dump(self.chat_history, f, indent=2)
+                json.dump({
+                    "chat_history": self.chat_history,
+                    "saved_at": datetime.now().isoformat(),
+                    "model": self.config.model
+                }, f, indent=2)
             self.logger.info(f"Chat history saved to {filepath}")
         except Exception as e:
             self.logger.error(f"Error saving chat history: {e}")
+
 
     def load_chat_history(self, filepath: str):
         """Load chat history from a JSON file"""
         try:
             with open(filepath, 'r') as f:
-                self.chat_history = json.load(f)
+                data = json.load(f)
+                self.chat_history = data.get("chat_history", [])
             self.logger.info(f"Chat history loaded from {filepath}")
         except Exception as e:
             self.logger.error(f"Error loading chat history: {e}")

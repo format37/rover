@@ -58,21 +58,26 @@ async def main():
                     mech.current_head_angle = new_head_angle
 
                 # Handle track movement
-                movement = response.get('movement', {})
-                left_track = movement.get('left_track', {})
-                right_track = movement.get('right_track', {})
-                
-                if 'direction' in left_track and 'direction' in right_track:
-                    await mech.move_tracks(
-                        track_speed if left_track['direction'] == 0 else -track_speed,
-                        track_speed if right_track['direction'] == 0 else -track_speed,
-                        2
-                    )
-                    await asyncio.sleep(2.0)
-                    await mech.stop()
+                try:
+                    movement = response.get('movement', {})
+                    left_track = movement.get('left_track', {})
+                    right_track = movement.get('right_track', {})
+                    
+                    if 'direction' in left_track and 'direction' in right_track:
+                        await mech.move_tracks(
+                            track_speed if left_track['direction'] == 0 else -track_speed,
+                            track_speed if right_track['direction'] == 0 else -track_speed,
+                            2
+                        )
+                        await asyncio.sleep(2.0)
+                        await mech.stop()
+                except Exception as e:
+                    logging.error(f"Skipping track movement due to JSON parse error: {e}")
 
                 counter += 1
+                print(f"Counter: {counter}")
                 if counter >= 5:
+                    print("Exiting main loop due to the end of the session")
                     break
 
         except Exception as e:
@@ -81,4 +86,3 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
-    
