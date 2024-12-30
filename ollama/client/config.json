@@ -1,5 +1,5 @@
 {
-    "model": "llava:34b",
+    "model": "llama3.2-vision",
     "client_type": "ollama",
     "api_key": "your-api-key",
     "ollama_api_url": "http://192.168.0.4:11434/api/generate",
