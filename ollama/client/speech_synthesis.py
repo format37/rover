@@ -18,7 +18,7 @@ class TTSGenerator:
         text: str, 
         output_path: str = 'output.wav',
         language: str = 'ru',
-        reference_file: str = 'kompot.wav'
+        reference_file: str = 'moon.wav'
     ) -> Optional[Path]:
         """
         Generate speech from text using TTS API
