@@ -45,7 +45,8 @@ async def main():
             logger.info("Starting main control loop...")
             # for counter in range(max_iterations):
             while max_iterations != 0:
-                logger.info(f"\nIteration {counter + 1}/{max_iterations}")
+                # logger.info(f"\nIteration {counter + 1}/{max_iterations}")
+                logger.info(f"\nIteration {abs(max_iterations)}")
                 
                 # Capture image
                 await camera.capture_and_save(save_raw=False)
@@ -108,7 +109,7 @@ async def main():
                     # logger.info("Waiting for next iteration...")
                     # await asyncio.sleep(15)  # 15 second delay between requests
 
-                    counter += 1
+                    # counter += 1
                     # if counter >= max_iterations:
                     #     logger.info("Reached maximum iterations, exiting main loop")
                     #     break
