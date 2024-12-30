@@ -68,7 +68,7 @@ class TTSGenerator:
         Returns:
             bool: True if both synthesis and playback were successful
         """
-        success = self.synthesize(text, output_file)
+        success = self.generate_speech(text, output_file)
         if success:
             return self.play_audio(output_file)
         return False
