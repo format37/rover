@@ -43,34 +43,33 @@ async def main():
             max_iterations = 5  # Maximum number of iterations before exiting
 
             logger.info("Starting main control loop...")
-            while True:
-                # try:
+            for counter in range(max_iterations):
+                logger.info(f"\nIteration {counter + 1}/{max_iterations}")
+                
                 # Capture image
-                logger.info(f"Capturing image (iteration {counter + 1}/{max_iterations})")
                 await camera.capture_and_save(save_raw=False)
                 
                 # Process image and get response
-                logger.info("Processing image with LLM...")
                 response = await llm_client.process_image("camera_output/color_frame.jpg")
-                print(f"LLM Response:\n{json.dumps(response, indent=2)}")
+                
+                # Log the response components
+                logger.info(f"Наблюдение: {response.get('наблюдение', '')}")
+                logger.info(f"Чувства: {response.get('чувства', '')}")
+                logger.info(f"Мысли: {response.get('мысли', '')}")
+                logger.info(f"Речь: {response.get('речь', '')}")
                 
                 # Save chat history
                 llm_client.save_chat_history("chat_history.json")
-                
+
                 # Handle speech synthesis
-                if speech_text := response.get('speech'):
+                if speech_text := response.get('речь'):
                     logger.info("Synthesizing speech...")
                     await tts_client.synthesize_and_play(speech_text)
 
                 # Handle head movement
-                if "movement" in response:
-                    if "head" in response["movement"]:
-                        head_data = response["movement"]["head"]
-                        if isinstance(head_data, dict) and "angle" in head_data:
-                            new_head_angle = head_data["angle"]
-                        else:
-                            new_head_angle = head_data  # For backward compatibility
-                        
+                if "движения" in response:
+                    if "голова" in response["движения"]:
+                        new_head_angle = response["движения"]["голова"]
                         try:
                             logger.info(f"Moving head to angle: {new_head_angle}")
                             await mech.smooth_head_move(mech.current_head_angle, new_head_angle)
@@ -78,15 +77,18 @@ async def main():
                         except Exception as e:
                             logger.error(f"Error during head movement: {e}")
 
-                    tracks = response["movement"]["tracks"]        
-                    left_track = tracks.get("left_track", 0)    
-                    right_track = tracks.get("right_track", 0)                        
-                    duration = tracks.get("duration", 1.0)                    
-                    if left_track != 0 or right_track != 0:
-                        logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
-                        await mech.move_tracks(left_track, right_track, duration)
-                    else:
-                        logger.debug("Skipping track movement as both tracks are set to 0")
+                    # Handle track movement
+                    if "гусеницы" in response["движения"]:
+                        tracks = response["движения"]["гусеницы"]
+                        left_track = tracks.get("левый", 0)
+                        right_track = tracks.get("правый", 0)
+                        duration = tracks.get("длительность", 1.0)
+                        
+                        if left_track != 0 or right_track != 0:
+                            logger.info(f"Moving tracks - Left: {left_track}, Right: {right_track}, Duration: {duration}")
+                            await mech.move_tracks(left_track, right_track, duration)
+                        else:
+                            logger.debug("Skipping track movement as both tracks are set to 0")
                         
 
                     # # Handle track movement
@@ -109,12 +111,6 @@ async def main():
                     if counter >= max_iterations:
                         logger.info("Reached maximum iterations, exiting main loop")
                         break
-
-                # except Exception as e:
-                #     logger.error(f"Error in main loop iteration {counter}: {e}")
-                #     # Continue with next iteration despite errors
-                #     await asyncio.sleep(1)  # Short delay before retry
-                #     continue
 
         except Exception as e:
             logger.error(f"Critical error in main function: {e}")
