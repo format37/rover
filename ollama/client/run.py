@@ -59,7 +59,7 @@ async def main():
                 logger.info(f"Речь: {response.get('речь', '')}")
                 
                 # Save chat history
-                llm_client.save_chat_history("chat_history.json")
+                llm_client.save_chat_history()
 
                 # Handle speech synthesis
                 if speech_text := response.get('речь'):
