@@ -59,7 +59,7 @@ class LLMClient:
         history_text += f"Текущее время: {current_time}\n\n"
         history_text += "Ваша задача:\n"
         
-        logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
+        # logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
         # Combine history with base prompt
         return f"{history_text}\n{base_prompt}"
 
@@ -77,11 +77,13 @@ class LLMClient:
         
         image_base64 = self._encode_image_to_base64(image_path)
         prompt = self._load_prompt()
-        
+        temperature = 0.8
+
         data = {
             "model": self.config['model'],
             "prompt": prompt,
-            "images": [image_base64]
+            "images": [image_base64],
+            "temperature": temperature
         }
 
         response = requests.post(
@@ -113,7 +115,7 @@ class LLMClient:
         if start != -1 and end != -1:
             # Extract just the JSON part, keeping the braces
             model_response = model_response[start:end + 1]
-        logger.info(f"Processed model response:\n{model_response}")
+        # logger.info(f"Processed model response:\n{model_response}")
         try:
             # Parse the response as JSON and store in history
             response_data = json.loads(model_response)
@@ -156,11 +158,12 @@ async def main():
     for i in range(5):
         logger.info(f"\nIteration {i+1}/5")
         response = await client.process_image("camera_output/color_frame.jpg")
+        logger.info(f"Время: {response['время']}")
         logger.info(f"Наблюдение: {response['наблюдение']}")
         logger.info(f"Чувства: {response['чувства']}")
         logger.info(f"Мысли: {response['мысли']}")
         logger.info(f"Речь: {response['речь']}")
-        # logger.info(f"Движения: {response['движения']}")
+        logger.info(f"Движения: {response['движения']}")
         client.save_chat_history()
         await asyncio.sleep(1)  # Small delay between iterations
     logger.info("End of iterations")
