@@ -3,7 +3,7 @@
     "client_type": "ollama",
     "api_key": "your-api-key",
     "ollama_api_url": "http://192.168.0.4:11434/api/generate",
-    "tts_api_url": "http://192.168.0.4:5000/synthesize",
+    "tts_api_url": "http://192.168.0.4:5000",
     "audio_device": "plughw:CARD=Device,DEV=0",
     "prompt_path": "prompts/robot_prompt.txt",
     "timeout": 120.0,

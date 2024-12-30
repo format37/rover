@@ -74,7 +74,9 @@ class TTSGenerator:
         return False
 
 async def main():
-    generator = TTSGenerator()
+    with open('config.json') as f:
+        config = json.load(f)
+    generator = TTSGenerator(base_url=config['tts_api_url'])
     text = "Так, кажется кому-то пора помыть посуду"
     await generator.synthesize_and_play(text)
 
