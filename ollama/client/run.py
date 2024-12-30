@@ -37,7 +37,7 @@ async def main():
             
             logger.info("Initializing TTS client...")
             # tts_client = TTSClient(config_path="config.json")
-            tts_client = TTSGenerator()
+            tts_client = TTSGenerator(base_url=json.load(open("config.json"))["tts_api_url"])
 
             # counter = 0
             max_iterations = -1  # Maximum number of iterations before exiting
