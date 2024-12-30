@@ -61,7 +61,7 @@ class LLMClient:
         # history_text += f"Текущее время: {current_time}\n\n"
         history_text += "Ваша задача:\n"
         
-        logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
+        # logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
         # Combine history with base prompt
         return f"{history_text}\n{base_prompt}"
 

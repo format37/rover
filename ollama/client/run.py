@@ -39,11 +39,12 @@ async def main():
             # tts_client = TTSClient(config_path="config.json")
             tts_client = TTSGenerator()
 
-            counter = 0
-            max_iterations = 5  # Maximum number of iterations before exiting
+            # counter = 0
+            max_iterations = -1  # Maximum number of iterations before exiting
 
             logger.info("Starting main control loop...")
-            for counter in range(max_iterations):
+            # for counter in range(max_iterations):
+            while max_iterations != 0:
                 logger.info(f"\nIteration {counter + 1}/{max_iterations}")
                 
                 # Capture image
@@ -108,9 +109,10 @@ async def main():
                     # await asyncio.sleep(15)  # 15 second delay between requests
 
                     counter += 1
-                    if counter >= max_iterations:
-                        logger.info("Reached maximum iterations, exiting main loop")
-                        break
+                    # if counter >= max_iterations:
+                    #     logger.info("Reached maximum iterations, exiting main loop")
+                    #     break
+            max_iterations -= 1
 
         except Exception as e:
             logger.error(f"Critical error in main function: {e}")
