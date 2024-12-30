@@ -45,22 +45,23 @@ class LLMClient:
         
         # Format the chat history
         history_text = "Воспоминания:\n"
-        for entry in self.chat_history:
-            # history_text += f"- Время: {entry.get('время', 'неизвестно')}\n"
-            # history_text += f"  Наблюдение: {entry['наблюдение']}\n"
-            # history_text += f"  Чувства: {entry['чувства']}\n"
-            # if entry.get('мысли'): history_text += f"  Мысли: {entry['мысли']}\n"
-            # if entry.get('речь'): history_text += f"  Речь: {entry['речь']}\n"
-            # if entry.get('движения'): history_text += f"  Движения: {json.dumps(entry['движения'], ensure_ascii=False)}\n"
-            # history_text += "\n"
-            history_text += f"{entry['наблюдение']}. {entry['чувства']}. {entry['мысли']}. {entry['речь']}.\n"
+        # for entry in self.chat_history:
+        entry = self.chat_history[-1]
+        # history_text += f"- Время: {entry.get('время', 'неизвестно')}\n"
+        # history_text += f"  Наблюдение: {entry['наблюдение']}\n"
+        # history_text += f"  Чувства: {entry['чувства']}\n"
+        # if entry.get('мысли'): history_text += f"  Мысли: {entry['мысли']}\n"
+        # if entry.get('речь'): history_text += f"  Речь: {entry['речь']}\n"
+        # if entry.get('движения'): history_text += f"  Движения: {json.dumps(entry['движения'], ensure_ascii=False)}\n"
+        # history_text += "\n"
+        history_text += f"{entry['наблюдение']}. {entry['чувства']}. {entry['мысли']}. {entry['речь']}.\n"
         
         # Add current time before the task
         # current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         # history_text += f"Текущее время: {current_time}\n\n"
         history_text += "Ваша задача:\n"
         
-        # logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
+        logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
         # Combine history with base prompt
         return f"{history_text}\n{base_prompt}"
 
