@@ -4,7 +4,7 @@ from contextlib import AsyncExitStack
 from mech_controls import RobotController
 from camera_controls import CameraController
 from llm_client import create_llm_client
-from speech_synthesis import TTSClient
+from speech_synthesis import TTSGenerator
 import json
 
 async def main():
@@ -36,7 +36,8 @@ async def main():
                 stack.push_async_callback(llm_client.stop)
             
             logger.info("Initializing TTS client...")
-            tts_client = TTSClient(config_path="config.json")
+            # tts_client = TTSClient(config_path="config.json")
+            tts_client = TTSGenerator()
 
             counter = 0
             max_iterations = 5  # Maximum number of iterations before exiting

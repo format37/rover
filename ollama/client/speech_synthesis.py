@@ -2,6 +2,8 @@ import requests
 import json
 from pathlib import Path
 from typing import Optional
+import asyncio
+import os
 
 class TTSGenerator:
     def __init__(self, base_url: str = 'http://localhost:5000'):
@@ -55,10 +57,26 @@ class TTSGenerator:
         
         return None
 
-def main():
+    async def synthesize_and_play(self, text: str, output_file: str = 'speech.wav') -> bool:
+        """
+        Synthesize text to speech and play it immediately.
+        
+        Args:
+            text: Text to convert to speech
+            output_file: Path where to save the audio file
+            
+        Returns:
+            bool: True if both synthesis and playback were successful
+        """
+        success = self.synthesize(text, output_file)
+        if success:
+            return self.play_audio(output_file)
+        return False
+
+async def main():
     generator = TTSGenerator()
     text = "Так, кажется кому-то пора помыть посуду"
-    generator.generate_speech(text)
+    await generator.synthesize_and_play(text)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
