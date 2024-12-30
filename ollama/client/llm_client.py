@@ -44,19 +44,20 @@ class LLMClient:
             return base_prompt
         
         # Format the chat history
-        history_text = "Ваши воспоминания:\n"
+        history_text = "Воспоминания:\n"
         for entry in self.chat_history:
-            history_text += f"- Время: {entry.get('время', 'неизвестно')}\n"
-            history_text += f"  Наблюдение: {entry['наблюдение']}\n"
-            history_text += f"  Чувства: {entry['чувства']}\n"
-            if entry.get('мысли'): history_text += f"  Мысли: {entry['мысли']}\n"
-            if entry.get('речь'): history_text += f"  Речь: {entry['речь']}\n"
-            if entry.get('движения'): history_text += f"  Движения: {json.dumps(entry['движения'], ensure_ascii=False)}\n"
-            history_text += "\n"
+            # history_text += f"- Время: {entry.get('время', 'неизвестно')}\n"
+            # history_text += f"  Наблюдение: {entry['наблюдение']}\n"
+            # history_text += f"  Чувства: {entry['чувства']}\n"
+            # if entry.get('мысли'): history_text += f"  Мысли: {entry['мысли']}\n"
+            # if entry.get('речь'): history_text += f"  Речь: {entry['речь']}\n"
+            # if entry.get('движения'): history_text += f"  Движения: {json.dumps(entry['движения'], ensure_ascii=False)}\n"
+            # history_text += "\n"
+            history_text += f"{entry['наблюдение']}. {entry['чувства']}. {entry['мысли']}. {entry['речь']}.\n"
         
         # Add current time before the task
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        history_text += f"Текущее время: {current_time}\n\n"
+        # current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # history_text += f"Текущее время: {current_time}\n\n"
         history_text += "Ваша задача:\n"
         
         # logger.info(f"\n# Sending prompt:\n{history_text}\n{base_prompt}\n\n")
@@ -147,6 +148,46 @@ class LLMClient:
         with open(filename, 'w') as f:
             json.dump(self.chat_history, f, indent=2)
 
+    async def process_text(self, input_text: str, temperature: float = 0.5) -> str:
+        """Process a text prompt with the LLM model.
+        
+        Args:
+            input_text: The text to be processed
+            
+        Returns:
+            str: The model's response text
+        """
+        # prompt = self._load_prompt()
+        
+        data = {
+            "model": self.config['model'],
+            "prompt": input_text,
+            "temperature": temperature
+        }
+
+        response = requests.post(
+            self.config['ollama_api_url'],
+            json=data,
+            stream=True,
+            timeout=self.config['timeout']
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Request failed with status {response.status_code}: {response.text}")
+
+        model_response = ''
+        for line in response.iter_lines():
+            if line:
+                decoded_line = line.decode('utf-8')
+                json_obj = json.loads(decoded_line)
+                model_response += json_obj.get('response', '')
+                if json_obj.get('done', False):
+                    break
+                # Small delay to allow other async operations
+                await sleep(0)
+
+        return model_response.strip()
+
 def create_llm_client(config_path: str) -> LLMClient:
     """Factory function to create an LLMClient instance."""
     return LLMClient(config_path)
@@ -166,6 +207,13 @@ async def main():
         logger.info(f"Движения: {response['движения']}")
         client.save_chat_history()
         await asyncio.sleep(1)  # Small delay between iterations
+    # response_str = json.dumps(response)
+#     memories = await client.process_text(f"""Пожалуйста опишите детально одним предложением:
+# Наблюдение: {response['наблюдение']}
+# Чувства: {response['чувства']}
+# Мысли: {response['мысли']}
+# Речь: {response['речь']}""", temperature=0.1)
+#     logger.info(f"Воспоминания: {memories}")
     logger.info("End of iterations")
 
 if __name__ == "__main__":
