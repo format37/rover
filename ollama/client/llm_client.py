@@ -429,3 +429,51 @@ def create_llm_client(config_path: str = "config.json", client_type: Optional[st
         return OpenAIClient(config_path)
     else:
         return OllamaClient(config_path)
+
+async def main():
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Initialize LLM client based on configuration
+        logger.info("Initializing LLM client...")
+        llm_client = create_llm_client(config_path="config.json")
+        
+        # Start the client if it's Ollama (OpenAI client doesn't need starting)
+        if hasattr(llm_client, 'start'):
+            await llm_client.start()
+        
+        try:
+            # Process image and get response
+            logger.info("Processing image with LLM...")
+            response = await llm_client.process_image("camera_output/color_frame.jpg")
+            print(f"LLM Response:\n{json.dumps(response, indent=2)}")
+            
+            # Save chat history
+            llm_client.save_chat_history("chat_history.json")
+
+        except Exception as e:
+            logger.error(f"Error during image processing: {e}")
+            raise
+
+        finally:
+            # Cleanup if using Ollama client
+            if hasattr(llm_client, 'stop'):
+                await llm_client.stop()
+
+    except Exception as e:
+        logger.error(f"Critical error in main function: {e}")
+        raise
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nReceived keyboard interrupt, shutting down...")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        raise
