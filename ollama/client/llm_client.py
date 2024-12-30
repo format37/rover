@@ -430,50 +430,30 @@ def create_llm_client(config_path: str = "config.json", client_type: Optional[st
     else:
         return OllamaClient(config_path)
 
-async def main():
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logger = logging.getLogger(__name__)
+async def test_run():
+    logging.basicConfig(level=logging.INFO)
+
+    # Create the LLM client based on config.json
+    llm_client = create_llm_client(config_path="config.json")
+
+    # If it's an Ollama client, we need to start it
+    if hasattr(llm_client, 'start'):
+        await llm_client.start()
 
     try:
-        # Initialize LLM client based on configuration
-        logger.info("Initializing LLM client...")
-        llm_client = create_llm_client(config_path="config.json")
-        
-        # Start the client if it's Ollama (OpenAI client doesn't need starting)
-        if hasattr(llm_client, 'start'):
-            await llm_client.start()
-        
-        try:
-            # Process image and get response
-            logger.info("Processing image with LLM...")
-            response = await llm_client.process_image("camera_output/color_frame.jpg")
-            print(f"LLM Response:\n{json.dumps(response, indent=2)}")
-            
-            # Save chat history
-            llm_client.save_chat_history("chat_history.json")
-
-        except Exception as e:
-            logger.error(f"Error during image processing: {e}")
-            raise
-
-        finally:
-            # Cleanup if using Ollama client
-            if hasattr(llm_client, 'stop'):
-                await llm_client.stop()
-
+        # Call the abstract method process_image to send a single image and prompt
+        response = await llm_client.process_image("camera_output/color_frame.jpg")
+        print("Received LLM Response:")
+        print(json.dumps(response, indent=2))
     except Exception as e:
-        logger.error(f"Critical error in main function: {e}")
-        raise
+        print(f"Error during test request: {e}")
+    finally:
+        # If it's an Ollama client, stop the background task
+        if hasattr(llm_client, 'stop'):
+            await llm_client.stop()
 
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nReceived keyboard interrupt, shutting down...")
-    except Exception as e:
-        print(f"Fatal error: {e}")
-        raise
+def main():
+    asyncio.run(test_run())
+
+if __name__ == "__main__":
+    main()
