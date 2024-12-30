@@ -125,6 +125,8 @@ class LLMClient:
                 self.chat_history = self.chat_history[-self.config['max_history_size']:]
         except json.JSONDecodeError as e:
             logger.error(f"Error decoding JSON response: {e}")
+            # Clear the chat history
+            self.chat_history = []
             # Fill the response with default answers
             response_data = {
                 "время": current_time,
@@ -133,7 +135,7 @@ class LLMClient:
                 "мысли": "",
                 "речь": "",
                 "движения": {}
-            }
+            }            
         
         return response_data
 
