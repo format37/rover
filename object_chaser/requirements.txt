@@ -1,0 +1,2 @@
+ultralytics==8.3.62
+tqdm==4.67.1
