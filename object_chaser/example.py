@@ -4,10 +4,11 @@ from ultralytics import YOLO
 from tqdm import tqdm
 import torch
 import time
-import os
+# import os
+import sys
 
 class ObjectDetector:
-    def __init__(self, model_path="yolo11n.pt", num_runs=10, show_prints=False, show_viz=False):
+    def __init__(self, model_path="yolov3.pt", num_runs=10, show_prints=False, show_viz=False):
         self.num_runs = num_runs
         self.show_detailed_prints = show_prints
         self.show_visualization = show_viz
@@ -23,17 +24,16 @@ class ObjectDetector:
     
     def _load_model(self, model_path):
         """Load YOLO model with progress bar"""
-        with tqdm(total=1, desc="Loading YOLO model") as pbar:
-            self.model = YOLO(model_path)
+        with tqdm(total=1, desc="Loading YOLO model (YOLOv3)"):
+            self.model = YOLO(model_path)  # Validate that 'yolov3.pt' is at the correct path
             self.model.to('cuda' if self.cuda_available else 'cpu')
-            pbar.update(1)
     
     def process_image(self, image_path):
         """Process image and perform object detection"""
         self.img = cv2.imread(image_path)
         total_time = 0
         
-        with tqdm(total=self.num_runs, desc="Processing image") as pbar:
+        with tqdm(total=self.num_runs, desc="Processing image"):
             for _ in range(self.num_runs):
                 start_time = time.time()
                 results = self.model(self.img)
@@ -41,8 +41,7 @@ class ObjectDetector:
                 total_time += run_time
                 
                 self._process_results(results)
-                pbar.update(1)
-        
+    
         self._print_metrics(total_time)
         
         if self.show_visualization:
@@ -97,9 +96,12 @@ class ObjectDetector:
 
 def main():
     # Configuration parameters
-    MODEL_PATH = "yolo11n.pt"
+    MODEL_PATH = "yolov3.pt"
     IMAGE_PATH = "photo.jpg"
-    NUM_RUNS = int(os.environ.get('NUM_RUNS', 10))
+    
+    # Get number of runs from command line argument, default to 10 if not provided
+    NUM_RUNS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
+    
     SHOW_DETAILED_PRINTS = False
     SHOW_VISUALIZATION = False
     

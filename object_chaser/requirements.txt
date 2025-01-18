@@ -1,2 +1,5 @@
 ultralytics==8.3.62
 tqdm==4.67.1
+scikit-build==0.18.1
+opencv-python==4.11.0.86
+matplotlib==3.7.5
