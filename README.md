@@ -5,6 +5,10 @@ Flashing is available by RMB on image file and select SD.
 2. **Check CUDA**
 Clone the repo and check opencv cuda
 ```
+
+```
+
+```
 git clone https://github.com/format37/rover.git
 cd rover/object_chaser
 python3 cuda_test.py
