@@ -15,6 +15,7 @@ python3 cuda_test.py
 ```
 Based on the (following repo)[https://github.com/otamajakusi/yolov5-opencv-cpp-python] I've prepared a test script which need to run in GUI:
 ```
+sh download_yolo_model.sh
 python3 yolo_test.py
 ```
 

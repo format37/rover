@@ -1,0 +1,1 @@
+wget https://github.com/otamajakusi/yolov5-opencv-cpp-python/blob/main/config_files/yolov5s.onnx -P config_files
