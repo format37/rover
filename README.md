@@ -8,6 +8,23 @@ Clone the repo and check opencv cuda
 
 ```
 
+3. **Check yolo with CUDA**
+```
+mkdir ~/projects
+cd ~/projects
+git clone https://github.com/format37/yolov5-opencv-cpp-python.git
+git clone https://github.com/format37/rover.git
+cd rover/object_chaser
+cp ../../yolov5-opencv-cpp-python/sample.mp4 ./
+cp ../../yolov5-opencv-cpp-python/config_files ./
+python3 yolo_test.py cuda
+python3 opencv_cuda_test.py
+```
+4. **Check torch
+```
+python3 torch_cuda_test.py
+```
+
 ```
 git clone https://github.com/format37/rover.git
 cd rover/object_chaser

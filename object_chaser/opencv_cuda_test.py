@@ -1,3 +1,3 @@
 import cv2
 print(cv2.getBuildInformation())
-print(cv2.cuda.getCudaEnabledDeviceCount())
+print(f'CUDA device count: {cv2.cuda.getCudaEnabledDeviceCount()}')
