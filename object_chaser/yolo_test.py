@@ -146,10 +146,11 @@ while True:
         fps = 1000000000 * frame_count / (end - start)
         frame_count = 0
         start = time.time() * 1e9
+        break
     
-    if fps > 0:
-        fps_label = "FPS: %.2f" % fps
-        cv2.putText(frame, fps_label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    # if fps > 0:
+    #     fps_label = "FPS: %.2f" % fps
+    #     cv2.putText(frame, fps_label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     # cv2.imshow("output", frame)
 
