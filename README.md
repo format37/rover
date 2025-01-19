@@ -1,3 +1,19 @@
+### Jetson Nano
+1. **Download the Jetson Nano image**
+[Download and flash from ubuntu](https://qengineering.eu/install-opencv-on-jetson-nano.html)  
+Flashing is available by RMB on image file and select SD.
+2. **Check CUDA**
+Clone the repo and check opencv cuda
+```
+git clone https://github.com/format37/rover.git
+cd rover/object_chaser
+python3 cuda_test.py
+```
+Based on the (following repo)[https://github.com/otamajakusi/yolov5-opencv-cpp-python] I've prepared a test script which need to run in GUI:
+```
+python3 yolo_test.py
+```
+
 ### Requirements
 * GPU with 22+ Gb of memory for ollama server
 * Python managed Rover with camera as ollama client
