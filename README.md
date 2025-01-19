@@ -31,7 +31,8 @@ sudo systemctl start ollama
 sudo systemctl start ssh
 sudo systemctl enable ssh
 ```
-2. **Python**
+
+1.b **Python**
 First upgrade may take couple of hours. Need to press Y multiple times.
 Automatically restart Docker daemon: Y
 Upgrade and reboot:
@@ -40,28 +41,15 @@ sudo apt update && sudo apt upgrade -y
 sudo reboot now
 ```
 Install Python:
-Check that you have python3.6 installed. If you have python3.6, then you don't need to perfrom the steps of this point.
 ```
 sudo apt-get install nano
-<!-- sudo apt install python3.9 -y
+sudo apt install python3.8 -y
 sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
 sudo update-alternatives --install /usr/bin/python3 python /usr/bin/python3.8 1
-sudo ln -s /usr/bin/python3.8 /usr/bin/python -->
-
-sudo apt install python3.6 -y
-sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.6 1
-sudo update-alternatives --install /usr/bin/python3 python /usr/bin/python3.6 1
-sudo ln -s /usr/bin/python3.6 /usr/bin/python
-sudo ln -s /usr/bin/python3.6 /usr/bin/python3
-
-sudo apt install python3-pip -y
-sudo apt-get install python3-dev python3-pip python3-setuptools
-sudo apt-get install python3-distutils
-python -m pip install --upgrade pip setuptools
-python --version
-python3 --version
+sudo ln -s /usr/bin/python3.8 /usr/bin/python
 ```
-3. **Mount nvcc**
+
+2. **Mount nvcc**
 Open your .bashrc file:
 ```
 nano ~/.bashrc
@@ -83,14 +71,9 @@ Check Jetpack
 ```
 sudo apt-cache show nvidia-jetpack
 ```
-4. **Prepare pytorch for cuda**
+3. **Prepare pytorch for cuda**
 Since Jetson Nano is [limited by JetPack4](https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048) we have to install torch-1.10 to have access to Jetson's GPU and the latest available for Jetson Nano YOLO version is YOLOv3.
 You need to download the coresponding whl to your jetson from the [pytorch list whl](https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048). Idk why the classic wget downloading thw wrong whl. Downloading from the web page is fine.
-```
-<!-- sudo apt-get install python3-pip libopenblas-dev -y -->
-python3 -m pip install torch-1.10.0-cp36-cp36m-linux_aarch64.whl
-```
-Check that torch is installed and that the cuda is available:
 ```
 python3
 >>> import torch
@@ -98,12 +81,127 @@ python3
 >>> print(torch.cuda.is_available())
 ```
 
-Previous tries:
+4. **Prepare OpenCV for CDNN**
+[YOLOv5 with OpenCV on Jetson Nano](https://i7y.org/en/yolov5-with-opencv-on-jetson-nano)
+I've noticed that OpenCV works with python3.8 So we have to check CUDNN availability after installation.  
+Install package:
 ```
-<!-- sudo apt-get install python3-pip libopenblas-base libopenmpi-dev
-git clone --recursive https://github.com/pytorch/pytorch
-cd pytorch
-export CMAKE_PREFIX_PATH="$(dirname $(which python))/../.." -->
+sudo apt-get update
+sudo apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    gfortran \
+    libatlas-base-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libavresample-dev \
+    libcanberra-gtk3-module \
+    libdc1394-22-dev \
+    libeigen3-dev \
+    libglew-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-good1.0-dev \
+    libgstreamer1.0-dev \
+    libgtk-3-dev \
+    libjpeg-dev \
+    libjpeg8-dev \
+    libjpeg-turbo8-dev \
+    liblapack-dev \
+    liblapacke-dev \
+    libopenblas-dev \
+    libpng-dev \
+    libpostproc-dev \
+    libswscale-dev \
+    libtbb-dev \
+    libtbb2 \
+    libtesseract-dev \
+    libtiff-dev \
+    libv4l-dev \
+    libxine2-dev \
+    libxvidcore-dev \
+    libx264-dev \
+    pkg-config \
+    python3.8-dev \
+    python3-numpy \
+    python3-matplotlib \
+    python3-pip \
+    qv4l2 \
+    v4l-utils \
+    v4l2ucp \
+    zlib1g-dev \
+    nvidia-cuda \
+    nvidia-cudnn8
+```
+Next, install the python3.8 package. The key point is to uninstall the pre-installed opencv package and python3 numpy and install the python3.8 numpy.
+```
+apt list --installed | grep -i opencv | awk -F/ '{print $1}'| xargs sudo apt purge -y
+sudo python3 -m pip install -U pip
+sudo python3 -m pip uninstall -y numpy
+sudo python3.8 -m pip install -U pip
+sudo python3.8 -m pip install setuptools
+sudo python3.8 -m pip install numpy
+```
+Clone OpenCV.
+```
+git clone --depth 1 --branch 4.6.0 https://github.com/opencv/opencv.git
+git clone --depth 1 --branch 4.6.0 https://github.com/opencv/opencv_contrib.git
+```
+Set CMAKFLAGS.
+```
+CMAKEFLAGS="
+        -D BUILD_EXAMPLES=OFF
+        -D BUILD_opencv_python2=OFF
+        -D BUILD_opencv_python3=ON
+        -D CMAKE_BUILD_TYPE=RELEASE
+        -D CMAKE_INSTALL_PREFIX=/usr/local
+        -D CUDA_ARCH_BIN=5.3,6.2,7.2
+        -D CUDA_ARCH_PTX=
+        -D CUDA_FAST_MATH=ON
+        -D CUDNN_VERSION='8.0'
+        -D EIGEN_INCLUDE_PATH=/usr/include/eigen3 
+        -D ENABLE_NEON=ON
+        -D OPENCV_DNN_CUDA=ON
+        -D OPENCV_ENABLE_NONFREE=ON
+        -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules
+        -D OPENCV_GENERATE_PKGCONFIG=ON
+        -D WITH_CUBLAS=ON
+        -D WITH_CUDA=ON
+        -D WITH_CUDNN=ON
+        -D WITH_GSTREAMER=ON
+        -D WITH_LIBV4L=ON
+        -D WITH_OPENGL=ON
+        -D INSTALL_PYTHON_EXAMPLES=ON
+        -D PYTHON3_EXECUTABLE=python3.8
+        -D PYTHON3_INCLUDE_PATH=$(python3.8 -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())")
+        -D PYTHON3_PACKAGES_PATH=$(python3.8 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
+        -D PYTHON3_LIBRARY=/usr/lib/aarch64-linux-gnu/libpython3.8.so"
+```
+Build & install. Jetson Nano core number 4 is specified as make -j$(nproc), it builds fine in my environment. if you want to run with another OpenCV version other than 4.6.0, please refer to Please refer to [this link](https://qengineering.eu/install-opencv-4.5-on-jetson-nano.html).
+```
+cd opencv
+mkdir build
+cd build
+cmake ${CMAKEFLAGS} ..
+```
+The following commands takes about 2 hours and 40 minutes..
+```
+make -j$(nproc)
+sudo make install
+```
+Update the Dynamic Linker's Cache
+```
+sudo ldconfig -v
+```
+Check cuda
+```
+print(cv2.getBuildInformation())
+print(cv2.cuda.getCudaEnabledDeviceCount())
+```
+5. **YOLO5 running**
+```
+git clone https://github.com/otamajakusi/yolov5-opencv-cpp-python.git
+cd yolov5-opencv-cpp-python
 ```
 
 ### Client installation (Jetson Nano)
