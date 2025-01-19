@@ -49,6 +49,60 @@ def wrap_detection(input_image, output_data):
     image_width, image_height, _ = input_image.shape
 
     x_factor = image_width / INPUT_WIDTH
+    y_factor = image_height / INPUT_HEIGHT
+
+    for r in range(rows):
+        row = output_data[r]
+        confidence = row[4]
+        if confidence >= 0.4:
+            classes_scores = row[5:]
+            _, _, _, max_indx = cv2.minMaxLoc(classes_scores)
+            class_id = max_indx[1]
+            if (classes_scores[class_id] > .25):
+                confidences.append(float(confidence))  # Convert to float
+
+                class_ids.append(class_id)
+
+                x, y, w, h = row[0].item(), row[1].item(), row[2].item(), row[3].item() 
+                left = int((x - 0.5 * w) * x_factor)
+                top = int((y - 0.5 * h) * y_factor)
+                width = int(w * x_factor)
+                height = int(h * y_factor)
+                box = [left, top, width, height]  # Create as list instead of numpy array
+                boxes.append(box)
+
+    # Convert boxes to expected format
+    boxes = [box for box in boxes]  # Ensure boxes are in list format
+    confidences = np.array(confidences).astype(np.float32)  # Convert confidences to float32
+
+    if len(boxes) > 0:  # Only perform NMS if we have detections
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.25, 0.45)
+    else:
+        indexes = []
+
+    result_class_ids = []
+    result_confidences = []
+    result_boxes = []
+
+    for i in indexes:
+        # Handle both OpenCV 4.5.4+ and older versions
+        idx = i if isinstance(i, int) else i[0]
+        result_confidences.append(confidences[idx])
+        result_class_ids.append(class_ids[idx])
+        result_boxes.append(boxes[idx])
+
+    return result_class_ids, result_confidences, result_boxes
+
+def wrap_detection_deprecated(input_image, output_data):
+    class_ids = []
+    confidences = []
+    boxes = []
+
+    rows = output_data.shape[0]
+
+    image_width, image_height, _ = input_image.shape
+
+    x_factor = image_width / INPUT_WIDTH
     y_factor =  image_height / INPUT_HEIGHT
 
     for r in range(rows):
@@ -102,7 +156,7 @@ is_cuda = len(sys.argv) > 1 and sys.argv[1] == "cuda"
 net = build_model(is_cuda)
 capture = load_capture()
 
-start = time.time_ns()
+start = time.time() * 1e9
 frame_count = 0
 total_frames = 0
 fps = -1
@@ -129,10 +183,10 @@ while True:
          cv2.putText(frame, class_list[classid], (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, .5, (0,0,0))
 
     if frame_count >= 30:
-        end = time.time_ns()
+        end = time.time() * 1e9
         fps = 1000000000 * frame_count / (end - start)
         frame_count = 0
-        start = time.time_ns()
+        start = time.time() * 1e9
     
     if fps > 0:
         fps_label = "FPS: %.2f" % fps
