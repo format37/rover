@@ -36,8 +36,22 @@ sudo apt-get update && sudo apt-get upgrade -y
 ```
 
 2. **Install Required Dependencies**:
+Follow the instructions for the [Linux Distribution](https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md).
+Check the realsense with GUI:
+```
+realsense-viewer
+```
+If camera works well in GUI then continue to configure python wrappers:
 ```bash
-sudo apt-get install -y git libssl-dev libusb-1.0-0-dev pkg-config libgtk-3-dev
+sudo apt-get update
+sudo apt-get install -y \
+    git \
+    libssl-dev \
+    libusb-1.0-0-dev \
+    pkg-config \
+    libgtk-3-dev \
+    libcurl4-openssl-dev \
+    libglu1-mesa-dev
 ```
 
 3. **Clone the `librealsense` Repository**:
@@ -58,7 +72,8 @@ mkdir build && cd build
 
 6. **Configure the Build with CMake**:
 ```bash
-cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DPYTHON_EXECUTABLE=$(which python3)
+# cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DPYTHON_EXECUTABLE=$(which python3) -DCMAKE_EXE_LINKER_FLAGS="-lGLU"
+cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DBUILD_SHARED_LIBS=false -DPYTHON_EXECUTABLE=$(which python3)
 ```
 This command sets up the build to use the RSUSB backend and includes the Python bindings for Python 3.
 
@@ -69,7 +84,18 @@ sudo make install
 ```
 This step compiles the library and installs it on your system.
 
-8. **Update the Python Path**:
+8. **Instal pyrealsense via pip**
+```bash
+python3 -m pip install pyrealsense2
+```
+
+9. **Check pyrealsense2**
+```bash
+cd ~/projects/librealsense/wrappers/python/examples
+python3 opencv_viewer_example.py
+```
+
+<!-- 8. **Update the Python Path**:
 ```bash
 # export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.6/pyrealsense2/
 # Add the correct path to PYTHONPATH
@@ -77,4 +103,4 @@ export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.6
 ```
 This command adds the installed `pyrealsense2` module to your Python path.
 
-After completing these steps, you should be able to import `pyrealsense2` in your Python scripts and utilize the RealSense SDK functionalities.
+After completing these steps, you should be able to import `pyrealsense2` in your Python scripts and utilize the RealSense SDK functionalities. -->
