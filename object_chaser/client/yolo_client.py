@@ -56,8 +56,11 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                 if i == 0:
                     print("\nDetections in first image:")
                     for j, detection in enumerate(result['detections']):
+                        # Calculate middle point on x-axis
+                        x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
                         print(f"  {j+1}. {detection['label']} "
-                              f"(Confidence: {detection['confidence']:.2f})")
+                              f"(Confidence: {detection['confidence']:.2f}, "
+                              f"X-middle: {x_middle:.2f})")
             else:
                 print(f"Error: {response.status_code}, {response.text}")
     
@@ -109,8 +112,11 @@ def process_images(image_path, server_url, num_requests=10):
             # if len(server_times) == 1:
             print("\nDetections in first image:")
             for i, detection in enumerate(result['detections']):
+                # Calculate middle point on x-axis
+                x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
                 print(f"  {i+1}. {detection['label']} "
-                        f"(Confidence: {detection['confidence']:.2f})")
+                      f"(Confidence: {detection['confidence']:.2f}, "
+                      f"X-middle: {x_middle:.2f})")
         else:
             print(f"Error: {response.status_code}, {response.text}")
     
