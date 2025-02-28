@@ -78,9 +78,10 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                     # Add label with confidence
                     x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
                     x_normalized = x_middle / color_image.shape[0]
-                    label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f}) of {color_image.shape[0]}"
+                    # label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f}) of {color_image.shape[0]}"
+                    label = f"({x_normalized:.2f}, {color_image.shape[0]}, {detection['bbox']})"
                     cv2.putText(annotated_image, label, (x, y - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
                 
                 # Save the annotated image
                 os.makedirs(output_dir, exist_ok=True)
