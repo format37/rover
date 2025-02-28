@@ -112,7 +112,7 @@ def wrap_detection(input_image, output_data):
     return result_class_ids, result_confidences, result_boxes
 
 @app.on_event("startup")
-async def startup_event():
+def startup_event():
     global net, class_list
     logger.info("Loading YOLO model...")
     start_time = time.time()
@@ -125,17 +125,17 @@ def test_endpoint():
     return {"message": "YOLO API is working!"}
 
 @app.get("/favicon.ico")
-async def favicon():
+def favicon():
     return Response(status_code=204)
 
 @app.post("/detect/")
-async def detect_objects(file: UploadFile = File(...)):
+def detect_objects(file: UploadFile = File(...)):
     try:
         global request_counter, net, class_list
         request_counter += 1
         
-        # Read and validate the uploaded image
-        contents = await file.read()
+        # Read and validate the uploaded image - synchronous approach
+        contents = file.file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
@@ -177,8 +177,5 @@ async def detect_objects(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Replace the custom server startup with a simpler approach compatible with Python 3.6
-    import uvicorn
-    
-    # Use the standard uvicorn.run() method which is compatible with Python 3.6
-    uvicorn.run(app, host="0.0.0.0", port=8765)
+    # Simple synchronous run for Python 3.6 compatibility
+    uvicorn.run(app, host="0.0.0.0", port=8765, log_level="info")
