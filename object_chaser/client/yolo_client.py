@@ -60,12 +60,12 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                     print("\nDetections in first image:")
                     for j, detection in enumerate(result['detections']):
                         # Calculate middle point on x-axis
-                        x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
+                        x_middle = detection['bbox'][0] + detection['bbox'][2] / 2
                         # Calculate normalized position (0 to 1)
-                        x_normalized = x_middle / color_image.shape[0]
+                        x_normalized = x_middle / color_image.shape[1]
                         print(f"  {j+1}. {detection['label']} "
                               f"(Confidence: {detection['confidence']:.2f}, "
-                              f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}) of {color_image.shape[0]}")
+                              f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}) of {color_image.shape[1]}")
                 
                 # Draw bounding boxes on the image
                 for detection in result['detections']:
@@ -76,10 +76,10 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                     cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     
                     # Add label with confidence
-                    x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
-                    x_normalized = x_middle / color_image.shape[0]
-                    # label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f}) of {color_image.shape[0]}"
-                    label = f"({x_normalized:.2f}, {color_image.shape[0]}, {detection['bbox']})"
+                    x_middle = detection['bbox'][0] + detection['bbox'][2] / 2
+                    x_normalized = x_middle / color_image.shape[1]
+                    # label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f}) of {color_image.shape[1]}"
+                    label = f"({x_normalized:.2f}, {color_image.shape[1]}, {detection['bbox']})"
                     cv2.putText(annotated_image, label, (x, y - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
                 
