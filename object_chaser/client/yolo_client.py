@@ -106,11 +106,11 @@ def process_images(image_path, server_url, num_requests=10):
             server_times.append(result['processing_time'])
             
             # Optional: Print detections for the first request
-            if len(server_times) == 1:
-                print("\nDetections in first image:")
-                for i, detection in enumerate(result['detections']):
-                    print(f"  {i+1}. {detection['label']} "
-                          f"(Confidence: {detection['confidence']:.2f})")
+            # if len(server_times) == 1:
+            print("\nDetections in first image:")
+            for i, detection in enumerate(result['detections']):
+                print(f"  {i+1}. {detection['label']} "
+                        f"(Confidence: {detection['confidence']:.2f})")
         else:
             print(f"Error: {response.status_code}, {response.text}")
     
