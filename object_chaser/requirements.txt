@@ -3,3 +3,6 @@ tqdm==4.67.1
 scikit-build==0.18.1
 opencv-python==4.11.0.86
 matplotlib==3.7.5
+fastapi==0.83.0
+uvicorn==0.17.0
+python-multipart==0.0.5
