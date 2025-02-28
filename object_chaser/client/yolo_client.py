@@ -65,7 +65,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                         x_normalized = x_middle / color_image.shape[1]
                         print(f"  {j+1}. {detection['label']} "
                               f"(Confidence: {detection['confidence']:.2f}, "
-                              f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f})")
+                              f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}) of {color_image.shape[1]}")
                 
                 # Draw bounding boxes on the image
                 for detection in result['detections']:
@@ -78,7 +78,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                     # Add label with confidence
                     x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
                     x_normalized = x_middle / color_image.shape[1]
-                    label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f})"
+                    label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f}) of {color_image.shape[1]}"
                     cv2.putText(annotated_image, label, (x, y - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 
