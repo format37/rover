@@ -5,6 +5,7 @@ import argparse
 import asyncio
 from tqdm import tqdm
 from camera_controls import CameraController
+import cv2
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False, num_requests=10):
     """
@@ -39,7 +40,6 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                 await camera.save_frames(depth_image, color_image)
             
             # Convert color image to JPEG format in memory
-            import cv2
             _, img_encoded = cv2.imencode('.jpg', color_image)
             image_data = img_encoded.tobytes()
             
@@ -52,6 +52,9 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                 result = response.json()
                 server_times.append(result['processing_time'])
                 
+                # Create a copy of the image for drawing bounding boxes
+                annotated_image = color_image.copy()
+                
                 # Print detections for the first request
                 if i == 0:
                     print("\nDetections in first image:")
@@ -63,6 +66,23 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                         print(f"  {j+1}. {detection['label']} "
                               f"(Confidence: {detection['confidence']:.2f}, "
                               f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f})")
+                
+                # Draw bounding boxes on the image
+                for detection in result['detections']:
+                    # Extract bounding box coordinates
+                    x, y, w, h = detection['bbox']
+                    
+                    # Draw rectangle
+                    cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    
+                    # Add label with confidence
+                    label = f"{detection['label']}: {detection['confidence']:.2f}"
+                    cv2.putText(annotated_image, label, (x, y - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Save the annotated image
+                os.makedirs(output_dir, exist_ok=True)
+                cv2.imwrite(f"{output_dir}/annotated_image_{i}.jpg", annotated_image)
             else:
                 print(f"Error: {response.status_code}, {response.text}")
     
@@ -72,13 +92,14 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
     
     return fps, total_time, server_times
 
-def process_images(image_path, server_url, num_requests=10):
+def process_images(image_path, server_url, output_dir='.', num_requests=10):
     """
     Send multiple image requests to the YOLO server and calculate performance metrics.
     
     Args:
         image_path: Path to the image file
         server_url: URL of the YOLO server
+        output_dir: Directory to save annotated images
         num_requests: Number of requests to send
     
     Returns:
@@ -93,6 +114,11 @@ def process_images(image_path, server_url, num_requests=10):
     with open(image_path, 'rb') as img_file:
         image_data = img_file.read()
     
+    # Load the original image for annotation
+    original_image = cv2.imread(image_path)
+    if original_image is None:
+        raise ValueError(f"Could not read image: {image_path}")
+    
     # Prepare for requests
     url = f"{server_url}/detect/"
     server_times = []
@@ -101,7 +127,7 @@ def process_images(image_path, server_url, num_requests=10):
     start_time = time.time()
     
     # Send requests
-    for _ in tqdm(range(num_requests), desc="Sending requests"):
+    for i in tqdm(range(num_requests), desc="Sending requests"):
         files = {'file': ('image.jpg', image_data, 'image/jpeg')}
         
         response = requests.post(url, files=files)
@@ -110,19 +136,39 @@ def process_images(image_path, server_url, num_requests=10):
             result = response.json()
             server_times.append(result['processing_time'])
             
+            # Create a copy of the image for drawing bounding boxes
+            annotated_image = original_image.copy()
+            
             # Print detections for the first request
-            print("\nDetections in first image:")
-            for i, detection in enumerate(result['detections']):
-                # Calculate middle point on x-axis
-                x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
-                # Get image width from the result (assuming server returns image dimensions)
-                # If not available, we'll need to extract it from the original image
-                image_width = result.get('image_width', 640)  # Default to 640 if not provided
-                # Calculate normalized position (0 to 1)
-                x_normalized = x_middle / image_width
-                print(f"  {i+1}. {detection['label']} "
-                      f"(Confidence: {detection['confidence']:.2f}, "
-                      f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f})")
+            if i == 0:
+                print("\nDetections in first image:")
+                for j, detection in enumerate(result['detections']):
+                    # Calculate middle point on x-axis
+                    x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
+                    # Get image width from the original image
+                    image_width = original_image.shape[1]
+                    # Calculate normalized position (0 to 1)
+                    x_normalized = x_middle / image_width
+                    print(f"  {j+1}. {detection['label']} "
+                          f"(Confidence: {detection['confidence']:.2f}, "
+                          f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f})")
+            
+            # Draw bounding boxes on the image
+            for detection in result['detections']:
+                # Extract bounding box coordinates
+                x, y, w, h = detection['bbox']
+                
+                # Draw rectangle
+                cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                
+                # Add label with confidence
+                label = f"{detection['label']}: {detection['confidence']:.2f}"
+                cv2.putText(annotated_image, label, (x, y - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            
+            # Save the annotated image
+            os.makedirs(output_dir, exist_ok=True)
+            cv2.imwrite(f"{output_dir}/annotated_image_{i}.jpg", annotated_image)
         else:
             print(f"Error: {response.status_code}, {response.text}")
     
@@ -150,6 +196,7 @@ async def async_main(args):
         print(f"Average server processing time: {sum(server_times)/len(server_times):.3f} seconds")
         print(f"Min processing time: {min(server_times):.3f} seconds")
         print(f"Max processing time: {max(server_times):.3f} seconds")
+        print(f"Annotated images saved to: {os.path.abspath(args.output_dir)}")
         
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -173,7 +220,7 @@ def main():
             # Use original static image process
             print(f"Sending {args.count} requests with image: {args.image}")
             fps, total_time, server_times = process_images(
-                args.image, args.server, args.count
+                args.image, args.server, args.output_dir, args.count
             )
             
             # Print performance metrics
@@ -183,6 +230,7 @@ def main():
             print(f"Average server processing time: {sum(server_times)/len(server_times):.3f} seconds")
             print(f"Min processing time: {min(server_times):.3f} seconds")
             print(f"Max processing time: {max(server_times):.3f} seconds")
+            print(f"Annotated images saved to: {os.path.abspath(args.output_dir)}")
         
     except Exception as e:
         print(f"Error: {str(e)}")
