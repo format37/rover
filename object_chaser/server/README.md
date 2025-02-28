@@ -1,0 +1,1 @@
+Server should be runned with python3.6 to access to Jetson GPU.

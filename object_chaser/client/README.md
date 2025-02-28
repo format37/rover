@@ -1,0 +1,1 @@
+Client should be runned with python3.8 to access to Realsense depth camera.
