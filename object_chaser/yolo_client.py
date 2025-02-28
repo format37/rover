@@ -16,6 +16,7 @@ def process_images(image_path, server_url, num_requests=10):
     Returns:
         tuple: (average FPS, total time, server processing times)
     """
+    print(f"Processing image: {image_path}")
     # Verify the image exists
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image not found: {image_path}")
