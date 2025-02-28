@@ -76,7 +76,9 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                     cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     
                     # Add label with confidence
-                    label = f"{detection['label']}: {detection['confidence']:.2f}"
+                    x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
+                    x_normalized = x_middle / color_image.shape[1]
+                    label = f"{detection['label']}: {detection['confidence']:.2f} ({x_normalized:.2f})"
                     cv2.putText(annotated_image, label, (x, y - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 
