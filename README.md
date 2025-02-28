@@ -27,7 +27,7 @@ I've used the usb audio device which works well with both speaker and mic.
 sudo apt-get install portaudio19-dev
 ```
 ### Realsense camera installation on Jetson nano
-0. Ensure that python3 is installed and defined as default python. I am using 3.8.
+0. Ensure that python3.8+ is installed and defined as default python. I am using 3.8. Check pyrealsense2 required python version if you need to use other version.
 To install the `pyrealsense2` Python wrapper on a Jetson Nano, you need to build the Intel RealSense SDK (`librealsense`) from source, as pre-built binaries are not compatible with the ARM architecture of the Jetson Nano. This process will also install the necessary RealSense software. Here's a step-by-step guide:
 
 1. **Update and Upgrade System Packages**:
@@ -72,8 +72,7 @@ mkdir build && cd build
 
 6. **Configure the Build with CMake**:
 ```bash
-# cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DPYTHON_EXECUTABLE=$(which python3) -DCMAKE_EXE_LINKER_FLAGS="-lGLU"
-cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DBUILD_SHARED_LIBS=false -DPYTHON_EXECUTABLE=$(which python3)
+cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DBUILD_SHARED_LIBS=false -DPYTHON_EXECUTABLE=$(which python3.8)
 ```
 This command sets up the build to use the RSUSB backend and includes the Python bindings for Python 3.
 
@@ -92,14 +91,14 @@ python3 -m pip install pyrealsense2
 9. **Check pyrealsense2**
 ```bash
 cd ~/projects/librealsense/wrappers/python/examples
-python3 opencv_viewer_example.py
+python3.8 opencv_viewer_example.py
 ```
 
 <!-- 8. **Update the Python Path**:
 ```bash
-# export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.6/pyrealsense2/
+# export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.8/pyrealsense2/
 # Add the correct path to PYTHONPATH
-export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.6
+export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.8
 ```
 This command adds the installed `pyrealsense2` module to your Python path.
 
