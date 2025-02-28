@@ -3,9 +3,7 @@ import time
 import sys
 import numpy as np
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import JSONResponse, Response
-import uvicorn
+from flask import Flask, request, jsonify
 import logging
 
 # Setup logging
@@ -15,7 +13,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = Flask(__name__)
 request_counter = 0
 
 # Constants
@@ -111,7 +109,8 @@ def wrap_detection(input_image, output_data):
 
     return result_class_ids, result_confidences, result_boxes
 
-@app.on_event("startup")
+# Initialize model on startup
+@app.before_first_request
 def startup_event():
     global net, class_list
     logger.info("Loading YOLO model...")
@@ -120,26 +119,32 @@ def startup_event():
     class_list = load_classes()
     logger.info(f"Model loaded in {time.time() - start_time:.2f} seconds")
 
-@app.get("/test")
+@app.route('/test', methods=['GET'])
 def test_endpoint():
-    return {"message": "YOLO API is working!"}
+    return jsonify({"message": "YOLO API is working!"})
 
-@app.get("/favicon.ico")
+@app.route('/favicon.ico', methods=['GET'])
 def favicon():
-    return Response(status_code=204)
+    return "", 204
 
-@app.post("/detect/")
-def detect_objects(file: UploadFile = File(...)):
+@app.route('/detect/', methods=['POST'])
+def detect_objects():
     try:
         global request_counter, net, class_list
         request_counter += 1
         
-        # Read and validate the uploaded image - synchronous approach
-        contents = file.file.read()
-        nparr = np.frombuffer(contents, np.uint8)
+        # Check if file exists in request
+        if 'file' not in request.files:
+            return jsonify({"error": "No file in request"}), 400
+        
+        file = request.files['file']
+        
+        # Read and validate the uploaded image
+        file_bytes = file.read()
+        nparr = np.frombuffer(file_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            raise HTTPException(status_code=400, detail="Invalid image file")
+            return jsonify({"error": "Invalid image file"}), 400
         
         logger.info(f"[{request_counter}] Processing image of shape {img.shape}")
         
@@ -167,19 +172,22 @@ def detect_objects(file: UploadFile = File(...)):
         process_time = time.time() - start_time
         logger.info(f"Detection completed in {process_time:.3f} seconds, found {len(detections)} objects")
         
-        return JSONResponse({
+        return jsonify({
             "detections": detections,
             "processing_time": process_time
         })
         
     except Exception as e:
         logger.error(f"Error processing image: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Python 3.6 compatible way to run uvicorn
-    import asyncio
-    loop = asyncio.get_event_loop()
-    config = uvicorn.Config(app, host="0.0.0.0", port=8765, log_level="info")
-    server = uvicorn.Server(config)
-    loop.run_until_complete(server.serve())
+    # Load the model right away instead of waiting for first request
+    logger.info("Loading YOLO model...")
+    start_time = time.time()
+    net = build_model(is_cuda)
+    class_list = load_classes()
+    logger.info(f"Model loaded in {time.time() - start_time:.2f} seconds")
+    
+    # Run the Flask server
+    app.run(host="0.0.0.0", port=8765, threaded=True)
