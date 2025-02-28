@@ -203,27 +203,32 @@ async def async_main(args):
 
 def main():
     parser = argparse.ArgumentParser(description='YOLO Detection Client')
-    parser.add_argument('--image', default='photo.jpg', help='Path to the image file (for static mode)')
+    parser.add_argument('--image', help='Path to the image file (for static mode)')
     parser.add_argument('--server', default='http://localhost:8765', help='YOLO server URL')
     parser.add_argument('--count', type=int, default=10, help='Number of requests to send')
-    parser.add_argument('--use_camera', action='store_true', help='Use camera feed instead of static image')
+    parser.add_argument('--use_camera', action='store_true', default=True, help='Use camera feed instead of static image')
     parser.add_argument('--output_dir', default='camera_output', help='Directory to save camera images')
     parser.add_argument('--enable_depth', action='store_true', help='Enable depth capture (for RealSense camera)')
     
     args = parser.parse_args()
     
     try:
-        if args.use_camera:
-            # Run async main for camera operations
-            asyncio.run(async_main(args))
-        else:
-            # Use original static image process
+        if args.image:
+            # If image is provided, override the use_camera setting
+            args.use_camera = False
             print(f"Sending {args.count} requests with image: {args.image}")
             fps, total_time, server_times = process_images(
                 args.image, args.server, args.output_dir, args.count
             )
+        elif args.use_camera:
+            # Run async main for camera operations
+            asyncio.run(async_main(args))
+        else:
+            print("Error: Either --image must be specified or --use_camera must be enabled")
+            return
             
-            # Print performance metrics
+        # Print performance metrics
+        if not args.use_camera:  # Only print metrics here for image mode
             print("\nPerformance Metrics:")
             print(f"Total time: {total_time:.2f} seconds")
             print(f"Average FPS: {fps:.2f}")
