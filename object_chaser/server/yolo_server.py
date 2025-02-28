@@ -24,20 +24,20 @@ NMS_THRESHOLD = 0.4
 CONFIDENCE_THRESHOLD = 0.4
 
 # Model and classes are loaded once on startup
-is_cuda = len(sys.argv) > 1 and sys.argv[1] == "cuda"
+is_cuda = len(sys.argv) > 1 and sys.argv[1] == "cpu"  # Default to CUDA unless CPU is specified
 net = None
 class_list = []
 
 def build_model(is_cuda):
     net = cv2.dnn.readNet("config_files/yolov5s.onnx")
     if is_cuda:
-        logger.info("Attempting to use CUDA")
-        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA_FP16)
-    else:
         logger.info("Running on CPU")
         net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+    else:
+        logger.info("Attempting to use CUDA")
+        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA_FP16)
     return net
 
 def load_classes():
