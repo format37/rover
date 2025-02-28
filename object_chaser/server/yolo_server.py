@@ -177,5 +177,9 @@ def detect_objects(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Simple synchronous run for Python 3.6 compatibility
-    uvicorn.run(app, host="0.0.0.0", port=8765, log_level="info")
+    # Python 3.6 compatible way to run uvicorn
+    import asyncio
+    loop = asyncio.get_event_loop()
+    config = uvicorn.Config(app, host="0.0.0.0", port=8765, log_level="info")
+    server = uvicorn.Server(config)
+    loop.run_until_complete(server.serve())
