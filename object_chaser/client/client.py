@@ -24,7 +24,7 @@ servo_lock = Lock()
 
 async def smooth_move(servo, duration=2, steps_per_second=100):
     global current_goal
-    logger.info(f"# Moving to goal: {current_goal}")
+    # logger.info(f"# Moving to goal: {current_goal}")
     last_angle = servo.angle if servo.angle is not None else 90
     step_duration = 1 / steps_per_second
     while True:
@@ -35,20 +35,20 @@ async def smooth_move(servo, duration=2, steps_per_second=100):
                 next_angle = min(last_angle + max_step, target_angle)
             else:
                 next_angle = max(last_angle - max_step, target_angle)
-            logger.info(f"Setting servo angle to {next_angle:.2f}")
+            # logger.info(f"Setting servo angle to {next_angle:.2f}")
             servo.angle = next_angle
             last_angle = next_angle
         await asyncio.sleep(step_duration)
 
 def update_goal(new_goal):
     global current_goal
-    logger.info(f"# Updating goal to {new_goal}")
+    # logger.info(f"# Updating goal to {new_goal}")
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
     with servo_lock:
         current_goal = (1 - new_goal) * 180
-    logger.info(f"Updated goal to {current_goal} degrees")
+    # logger.info(f"Updated goal to {current_goal} degrees")
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False, num_requests=10):
     print(f"Processing camera feed, sending {num_requests} requests to server")
@@ -73,7 +73,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                             x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2
                             x_normalized = x_middle / color_image.shape[1]
                             update_goal(x_normalized)
-                            logger.info(f"Updated goal to person with confidence {best_person['confidence']:.2f} at x_normalized={x_normalized:.2f}")
+                            # logger.info(f"Updated goal to person with confidence {best_person['confidence']:.2f} at x_normalized={x_normalized:.2f}")
                         annotated_image = color_image.copy()
                         if i == 0:
                             print("\nDetections in first image:")
@@ -117,13 +117,13 @@ async def main():
     logger.info("Starting smooth servo movement task")
     move_task = asyncio.create_task(smooth_move(head_servo))
     try:
-        logger.info("Testing servo movement")
-        update_goal(0.0)
-        await asyncio.sleep(2)
-        update_goal(0.5)
-        await asyncio.sleep(2)
-        update_goal(1.0)
-        await asyncio.sleep(2)
+        # logger.info("Testing servo movement")
+        # update_goal(0.0)
+        # await asyncio.sleep(2)
+        # update_goal(0.5)
+        # await asyncio.sleep(2)
+        # update_goal(1.0)
+        # await asyncio.sleep(2)
 
         logger.info(f"Starting camera feed")
         fps, total_time, server_times = await process_camera_feed(
