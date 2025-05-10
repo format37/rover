@@ -10,6 +10,7 @@ from adafruit_servokit import ServoKit
 from threading import Lock
 import logging
 import aiohttp
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -21,6 +22,9 @@ logger.addHandler(console_handler)
 
 current_goal = 90
 servo_lock = Lock()
+
+# Global bar for goal progress
+bar = None
 
 async def smooth_move(servo, duration=2, steps_per_second=100):
     global current_goal
@@ -41,13 +45,17 @@ async def smooth_move(servo, duration=2, steps_per_second=100):
         await asyncio.sleep(step_duration)
 
 def update_goal(new_goal):
-    global current_goal
+    global current_goal, bar
     # logger.info(f"# Updating goal to {new_goal}")
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
     with servo_lock:
         current_goal = (1 - new_goal) * 180
+    # Update the bar if it exists
+    if bar is not None:
+        bar.n = int(new_goal * 100)
+        bar.refresh()
     # logger.info(f"Updated goal to {current_goal} degrees")
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
@@ -76,16 +84,6 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 x_normalized = x_middle / color_image.shape[1]
                                 update_goal(x_normalized)
                             annotated_image = color_image.copy()
-                            if request_count == 0:
-                                print("\nDetections in first image:")
-                                for j, detection in enumerate(result['detections']):
-                                    x_middle = detection['bbox'][0] + detection['bbox'][2] / 2
-                                    x_normalized = x_middle / color_image.shape[1]
-                                    rectangle_area = detection['bbox'][2] * detection['bbox'][3]
-                                    print(f"  {j+1}. {detection['label']} "
-                                          f"(Confidence: {detection['confidence']:.2f}, "
-                                          f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}, "
-                                          f"Square: {rectangle_area:.2f}) of {color_image.shape[1]}")
                             for detection in result['detections']:
                                 x, y, w, h = detection['bbox']
                                 cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -106,13 +104,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     return fps, total_time, server_times
 
 async def main():
-    # parser = argparse.ArgumentParser(description="Object Chaser Client")
-    # parser.add_argument('--server', default='http://localhost:8765', help='YOLO server URL')
-    # parser.add_argument('--output-dir', default='camera_output', help='Output directory for images')
-    # parser.add_argument('--enable-depth', action='store_true', help='Enable depth capture')
-    # parser.add_argument('--count', type=int, default=10, help='Number of requests')
-    # args = parser.parse_args()
-
+    global bar
     server_url = 'http://localhost:8765'
     output_dir = 'camera_output'
     enable_depth = False
@@ -121,6 +113,11 @@ async def main():
     kit = ServoKit(channels=16, address=0x42)
     head_servo = kit.servo[0]
     head_servo.angle = 90
+
+    # Initialize tqdm bar for goal (0 to 1, 100 steps)
+    bar = tqdm(total=100, desc='Goal', position=0, leave=True, bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
+    bar.n = 0
+    bar.refresh()
 
     logger.info("Starting smooth servo movement task")
     move_task = asyncio.create_task(smooth_move(head_servo))
@@ -134,16 +131,14 @@ async def main():
         logger.info("\nPerformance Metrics:")
         logger.info(f"Total time: {total_time:.2f} seconds")
         logger.info(f"Average FPS: {fps:.2f}")
-        if server_times:
-            logger.info(f"Average server processing time: {sum(server_times)/len(server_times):.3f} seconds")
-            logger.info(f"Min processing time: {min(server_times):.3f} seconds")
-            logger.info(f"Max processing time: {max(server_times):.3f} seconds")
     except Exception as e:
         logger.error(f"Error: {str(e)}")
     finally:
         move_task.cancel()
         with servo_lock:
             head_servo.angle = None
+        if bar is not None:
+            bar.close()
         await asyncio.sleep(0.1)
 
 if __name__ == "__main__":
