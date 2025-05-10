@@ -1,12 +1,8 @@
 import asyncio
 from adafruit_servokit import ServoKit
-import math
 from threading import Lock
 import time
 
-# Initialize servo kit
-kit = ServoKit(channels=16, address=0x42)
-head_servo = kit.servo[0]
 current_goal = 90  # Initial goal angle in degrees (0 to 180)
 servo_lock = Lock()
 
@@ -20,14 +16,9 @@ async def smooth_move(servo, duration=2, steps_per_second=100):
     print(f"# Moving to goal: {current_goal}")
     last_angle = servo.angle if servo.angle is not None else 90
     step_duration = 1 / steps_per_second
-    initialized = False
 
     while True:
         with servo_lock:
-            if not initialized:
-                initialized = True
-                print(f"# Initialized")
-            # Get the current goal and calculate the step size
             target_angle = current_goal
             # Calculate step size based on remaining distance and duration
             max_step = abs(target_angle - last_angle) / (duration * steps_per_second)
@@ -36,11 +27,8 @@ async def smooth_move(servo, duration=2, steps_per_second=100):
                 next_angle = min(last_angle + max_step, target_angle)
             else:
                 next_angle = max(last_angle - max_step, target_angle)
-            # Apply sine easing for smoothness
-            t = (next_angle - last_angle) / (target_angle - last_angle) if target_angle != last_angle else 1
-            eased_angle = last_angle + (target_angle - last_angle) * (math.sin(t * math.pi - math.pi/2) + 1) / 2
-            servo.angle = eased_angle
-            last_angle = eased_angle
+            servo.angle = next_angle
+            last_angle = next_angle
         await asyncio.sleep(step_duration)
 
 def update_goal(new_goal):
@@ -57,6 +45,11 @@ def update_goal(new_goal):
     print(f"Updated goal to {current_goal} degrees")
 
 async def main():
+    # Initialize servo kit and head_servo here
+    kit = ServoKit(channels=16, address=0x42)
+    head_servo = kit.servo[0]
+    head_servo.angle = 90  # Set to a safe initial position
+
     # Start the smooth movement task in the background
     move_task = asyncio.create_task(smooth_move(head_servo))
 
