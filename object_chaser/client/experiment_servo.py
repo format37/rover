@@ -58,11 +58,11 @@ async def main():
         while True:
             # Example: Update goal every 0.333 seconds (3 Hz)
             update_goal(0.0)  # Move to 180 degrees
-            await asyncio.sleep(3)
+            await asyncio.sleep(0.3)
             update_goal(0.5)  # Move to 90 degrees
-            await asyncio.sleep(3)
+            await asyncio.sleep(0.3)
             update_goal(1.0)  # Move to 0 degrees
-            await asyncio.sleep(3)
+            await asyncio.sleep(0.3)
     except KeyboardInterrupt:
         print("Stopping...")
         move_task.cancel()
