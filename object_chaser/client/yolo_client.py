@@ -152,9 +152,11 @@ def process_images(image_path, server_url, output_dir='.', num_requests=10):
                     image_width = original_image.shape[1]
                     # Calculate normalized position (0 to 1)
                     x_normalized = x_middle / image_width
+                    rectangle_area = detection['bbox'][2] * detection['bbox'][3]
                     print(f"  {j+1}. {detection['label']} "
                           f"(Confidence: {detection['confidence']:.2f}, "
-                          f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f})")
+                          f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}, "
+                          f"Rectangle Area: {rectangle_area:.2f})")
             
             # Draw bounding boxes on the image
             for detection in result['detections']:
