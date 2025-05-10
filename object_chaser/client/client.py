@@ -13,6 +13,8 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+logger.info("Starting client")
+
 current_goal = 90  # Initial goal angle in degrees (0 to 180)
 servo_lock = Lock()
 
