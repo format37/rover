@@ -164,25 +164,29 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
     
     return fps, total_time, server_times
 
-async def async_main(args):
+async def main():
     """Async main function to handle camera operations"""
+    # Initialize servo kit and head_servo here
+    logger.info("Initializing servo")
+    kit = ServoKit(channels=16, address=0x42)
+    head_servo = kit.servo[0]
+    head_servo.angle = 90  # Set to a safe initial position
+
+    # Start the smooth movement task in the background
+    logger.info("Starting smooth servo movement task")
+    move_task = asyncio.create_task(smooth_move(head_servo))
     try:
-        # Initialize servo kit and head_servo here
-        logger.info("Initializing servo")
-        kit = ServoKit(channels=16, address=0x42)
-        head_servo = kit.servo[0]
-        head_servo.angle = 90  # Set to a safe initial position
+        server = "http://localhost:8765"
+        output_dir = "camera_output"
+        enable_depth = False
+        count = 10
 
-        # Start the smooth movement task in the background
-        logger.info("Starting smooth servo movement task")
-        move_task = asyncio.create_task(smooth_move(head_servo))
-
-        logger.info(f"Sending {args.count} requests from camera feed")
+        logger.info(f"Starting camera feed")
         fps, total_time, server_times = await process_camera_feed(
-            args.server, 
-            args.output_dir, 
-            args.enable_depth, 
-            args.count
+            server, 
+            output_dir, 
+            enable_depth, 
+            count
         )
         
         # Print performance metrics
@@ -203,18 +207,5 @@ async def async_main(args):
             head_servo.angle = None  # Reset servo
         await asyncio.sleep(0.1)
 
-def main():
-    parser = argparse.ArgumentParser(description='YOLO Detection Client')
-    parser.add_argument('--server', default='http://localhost:8765', help='YOLO server URL')
-    parser.add_argument('--count', type=int, default=10, help='Number of requests to send')
-    parser.add_argument('--use_camera', action='store_true', default=True, help='Use camera feed instead of static image')
-    parser.add_argument('--output_dir', default='camera_output', help='Directory to save camera images')
-    parser.add_argument('--enable_depth', action='store_true', help='Enable depth capture (for RealSense camera)')
-    
-    args = parser.parse_args()
-    
-    # Run async main for camera operations
-    asyncio.run(async_main(args))
-        
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
