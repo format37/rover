@@ -17,11 +17,16 @@ async def smooth_move(servo, duration=2, steps_per_second=100):
     steps_per_second: Number of steps per second for smooth movement.
     """
     global current_goal
+    print(f"# Moving to goal: {current_goal}")
     last_angle = servo.angle if servo.angle is not None else 90
     step_duration = 1 / steps_per_second
+    initialized = False
 
     while True:
         with servo_lock:
+            if not initialized:
+                initialized = True
+                print(f"# Initialized")
             # Get the current goal and calculate the step size
             target_angle = current_goal
             # Calculate step size based on remaining distance and duration
@@ -60,11 +65,11 @@ async def main():
         while True:
             # Example: Update goal every 0.333 seconds (3 Hz)
             update_goal(0.0)  # Move to 180 degrees
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(3)
             update_goal(0.5)  # Move to 90 degrees
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(3)
             update_goal(1.0)  # Move to 0 degrees
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(3)
     except KeyboardInterrupt:
         print("Stopping...")
         move_task.cancel()
