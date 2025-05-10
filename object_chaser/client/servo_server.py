@@ -19,11 +19,11 @@ async def smooth_move(servo, start_angle, end_angle, duration, steps=200):
 
 @app.get("/move")
 async def move_head(goal: float):
+    global current_angle
     if not 0 <= goal <= 1:
         return {"error": "Goal must be between 0 and 1"}
     target_angle = (1 - goal) * 180
     with servo_lock:
         await smooth_move(head_servo, current_angle, target_angle, duration=2)
-        global current_angle
         current_angle = target_angle
     return {"status": "success", "angle": target_angle}
