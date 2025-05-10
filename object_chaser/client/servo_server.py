@@ -35,6 +35,7 @@ async def startup_event():
 @app.get("/move")
 async def move_head(goal: float, background_tasks: BackgroundTasks):
     global current_goal
+    print(f"Moving to goal: {goal}")
     if not 0 <= goal <= 1:
         return {"error": "Goal must be between 0 and 1"}
     target_angle = (1 - goal) * 180
