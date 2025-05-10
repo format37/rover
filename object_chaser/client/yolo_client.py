@@ -63,9 +63,11 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                         x_middle = detection['bbox'][0] + detection['bbox'][2] / 2
                         # Calculate normalized position (0 to 1)
                         x_normalized = x_middle / color_image.shape[1]
+                        rectangle_area = detection['bbox'][2] * detection['bbox'][3]
                         print(f"  {j+1}. {detection['label']} "
                               f"(Confidence: {detection['confidence']:.2f}, "
-                              f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}) of {color_image.shape[1]}")
+                              f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}, "
+                              f"Square: {rectangle_area:.2f}) of {color_image.shape[1]}")
                 
                 # Draw bounding boxes on the image
                 for detection in result['detections']:
