@@ -26,7 +26,7 @@ servo_lock = Lock()
 # Global bar for goal progress
 bar = None
 
-async def smooth_move(servo, duration=2, steps_per_second=100):
+async def smooth_move(servo, duration=1, steps_per_second=100):
     global current_goal
     # logger.info(f"# Moving to goal: {current_goal}")
     last_angle = servo.angle if servo.angle is not None else 90
