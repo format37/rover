@@ -99,6 +99,16 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
                 result = response.json()
                 server_times.append(result['processing_time'])
                 
+                # --- New logic: Find the person with highest confidence and update goal ---
+                person_detections = [d for d in result['detections'] if d['label'] == 'person']
+                if person_detections:
+                    best_person = max(person_detections, key=lambda d: d['confidence'])
+                    x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2
+                    x_normalized = x_middle / color_image.shape[1]
+                    update_goal(x_normalized)
+                    logger.info(f"Updated goal to person with confidence {best_person['confidence']:.2f} at x_normalized={x_normalized:.2f}")
+                # --- End new logic ---
+                
                 # Create a copy of the image for drawing bounding boxes
                 annotated_image = color_image.copy()
                 
@@ -144,106 +154,20 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False, nu
     
     return fps, total_time, server_times
 
-def process_images(image_path, server_url, output_dir='.', num_requests=10):
-    """
-    Send multiple image requests to the YOLO server and calculate performance metrics.
-    
-    Args:
-        image_path: Path to the image file
-        server_url: URL of the YOLO server
-        output_dir: Directory to save annotated images
-        num_requests: Number of requests to send
-    
-    Returns:
-        tuple: (average FPS, total time, server processing times)
-    """
-    print(f"Processing image: {image_path}")
-    # Verify the image exists
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
-    
-    # Open the image file
-    with open(image_path, 'rb') as img_file:
-        image_data = img_file.read()
-    
-    # Load the original image for annotation
-    original_image = cv2.imread(image_path)
-    if original_image is None:
-        raise ValueError(f"Could not read image: {image_path}")
-    
-    # Prepare for requests
-    url = f"{server_url}/detect/"
-    server_times = []
-    
-    # Start timing
-    start_time = time.time()
-    
-    # Send requests
-    for i in tqdm(range(num_requests), desc="Sending requests"):
-        files = {'file': ('image.jpg', image_data, 'image/jpeg')}
-        
-        response = requests.post(url, files=files)
-        
-        if response.status_code == 200:
-            result = response.json()
-            server_times.append(result['processing_time'])
-            
-            # Create a copy of the image for drawing bounding boxes
-            annotated_image = original_image.copy()
-            
-            # Print detections for the first request
-            if i == 0:
-                print("\nDetections in first image:")
-                for j, detection in enumerate(result['detections']):
-                    # Calculate middle point on x-axis
-                    x_middle = (detection['bbox'][0] + detection['bbox'][2]) / 2
-                    # Get image width from the original image
-                    image_width = original_image.shape[1]
-                    # Calculate normalized position (0 to 1)
-                    x_normalized = x_middle / image_width
-                    rectangle_area = detection['bbox'][2] * detection['bbox'][3]
-                    print(f"  {j+1}. {detection['label']} "
-                          f"(Confidence: {detection['confidence']:.2f}, "
-                          f"X-middle: {x_middle:.2f}, Position: {x_normalized:.2f}, "
-                          f"Rectangle Area: {rectangle_area:.2f})")
-            
-            # Draw bounding boxes on the image
-            for detection in result['detections']:
-                # Extract bounding box coordinates
-                x, y, w, h = detection['bbox']
-                
-                # Draw rectangle
-                cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                
-                # Add label with confidence
-                label = f"{detection['label']}: {detection['confidence']:.2f}"
-                cv2.putText(annotated_image, label, (x, y - 10), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            
-            # Save the annotated image
-            os.makedirs(output_dir, exist_ok=True)
-            cv2.imwrite(f"{output_dir}/annotated_image_{i}.jpg", annotated_image)
-        else:
-            print(f"Error: {response.status_code}, {response.text}")
-    
-    # Calculate performance metrics
-    total_time = time.time() - start_time
-    fps = num_requests / total_time
-    
-    return fps, total_time, server_times
-
 async def async_main(args):
     """Async main function to handle camera operations"""
     try:
         # Initialize servo kit and head_servo here
+        logger.info("Initializing servo")
         kit = ServoKit(channels=16, address=0x42)
         head_servo = kit.servo[0]
         head_servo.angle = 90  # Set to a safe initial position
 
         # Start the smooth movement task in the background
+        logger.info("Starting smooth servo movement task")
         move_task = asyncio.create_task(smooth_move(head_servo))
 
-        print(f"Sending {args.count} requests from camera feed")
+        logger.info(f"Sending {args.count} requests from camera feed")
         fps, total_time, server_times = await process_camera_feed(
             args.server, 
             args.output_dir, 
@@ -252,16 +176,16 @@ async def async_main(args):
         )
         
         # Print performance metrics
-        print("\nPerformance Metrics:")
-        print(f"Total time: {total_time:.2f} seconds")
-        print(f"Average FPS: {fps:.2f}")
-        print(f"Average server processing time: {sum(server_times)/len(server_times):.3f} seconds")
-        print(f"Min processing time: {min(server_times):.3f} seconds")
-        print(f"Max processing time: {max(server_times):.3f} seconds")
-        print(f"Annotated images saved to: {os.path.abspath(args.output_dir)}")
+        logger.info("\nPerformance Metrics:")
+        logger.info(f"Total time: {total_time:.2f} seconds")
+        logger.info(f"Average FPS: {fps:.2f}")
+        logger.info(f"Average server processing time: {sum(server_times)/len(server_times):.3f} seconds")
+        logger.info(f"Min processing time: {min(server_times):.3f} seconds")
+        logger.info(f"Max processing time: {max(server_times):.3f} seconds")
+        logger.info(f"Annotated images saved to: {os.path.abspath(args.output_dir)}")
         
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.error(f"Error: {str(e)}")
 
     finally:
         move_task.cancel()
