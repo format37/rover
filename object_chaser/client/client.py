@@ -49,6 +49,7 @@ def update_goal(new_goal):
     Can be called from anywhere in the script or externally.
     """
     global current_goal
+    logger.info(f"# Updating goal to {new_goal}")
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
