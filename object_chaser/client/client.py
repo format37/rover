@@ -31,8 +31,8 @@ def update_goal(new_goal):
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
 
-    # Convert normalized position (0-1) to inverted angle (1=0°, 0=180°)
-    angle = (1 - new_goal) * 180
+    # Convert normalized position (0-1) to angle (0=0°, 1=180°)
+    angle = new_goal * 180
 
     try:
         # Send request to servo API
