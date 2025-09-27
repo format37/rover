@@ -26,11 +26,12 @@ bar = None
 
 def update_goal(new_goal):
     global bar
-    # logger.info(f"# Updating goal to {new_goal}")
+    logger.info(f"# Updating goal to {new_goal}")
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
 
+    fov = 87 # Realsense D435 horizontal FOV
     # Convert normalized position (0-1) to absolute target angle (like old current_goal)
     target_angle = (1 - new_goal) * 180
 
@@ -49,7 +50,6 @@ def update_goal(new_goal):
         bar.n = int(new_goal * 100)
         bar.refresh()
     # logger.info(f"Updated goal to {target_angle} degrees")
-    time.sleep(1)  # Debug
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     print(f"Processing camera feed, sending requests to server (infinite loop, Ctrl+C to stop)")
