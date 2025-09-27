@@ -31,7 +31,8 @@ def update_goal(new_goal):
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
     # Convert normalized position (0-1) to absolute target angle (like old current_goal)
-    target_angle = (1 - new_goal) * 180  # 0=left(180°), 1=right(0°)
+    # target_angle = (1 - new_goal) * 180  # 0=left(180°), 1=right(0°)
+    target_angle = new_goal * 180 # 0=left(0°), 1=right(180°)
 
     try:
         # Send absolute target to servo API (let servo API handle smooth movement)
