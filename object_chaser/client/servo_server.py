@@ -24,7 +24,7 @@ async def move_to_goal():
     while True:
         with servo_lock:
             start_angle = head_servo.angle if head_servo.angle is not None else 90
-            await smooth_move(head_servo, start_angle, current_goal, duration=2)
+            await smooth_move(head_servo, start_angle, current_goal, duration=4)
         await asyncio.sleep(0.1)  # Small delay to prevent tight loop
 
 @app.on_event("startup")

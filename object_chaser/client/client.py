@@ -32,7 +32,7 @@ def update_goal(new_goal):
         return
 
     # Convert normalized position (0-1) to angle (0=0°, 1=180°)
-    angle = new_goal * 180
+    angle = (1 - new_goal) * 180
 
     try:
         # Send request to servo API
