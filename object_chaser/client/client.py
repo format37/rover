@@ -6,8 +6,6 @@ import asyncio
 from tqdm import tqdm
 from camera_controls import CameraController
 import cv2
-from adafruit_servokit import ServoKit
-from threading import Lock
 import logging
 import aiohttp
 from tqdm import tqdm
@@ -20,43 +18,37 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-current_goal = 90
-servo_lock = Lock()
+servo_api_url = 'http://localhost:8000'
 
 # Global bar for goal progress
 bar = None
 
-async def smooth_move(servo, duration=1, steps_per_second=100):
-    global current_goal
-    # logger.info(f"# Moving to goal: {current_goal}")
-    last_angle = servo.angle if servo.angle is not None else 90
-    step_duration = 1 / steps_per_second
-    while True:
-        with servo_lock:
-            target_angle = current_goal
-            max_step = abs(target_angle - last_angle) / (duration * steps_per_second)
-            if last_angle < target_angle:
-                next_angle = min(last_angle + max_step, target_angle)
-            else:
-                next_angle = max(last_angle - max_step, target_angle)
-            # logger.info(f"Setting servo angle to {next_angle:.2f}")
-            servo.angle = next_angle
-            last_angle = next_angle
-        await asyncio.sleep(step_duration)
 
 def update_goal(new_goal):
-    global current_goal, bar
+    global bar
     # logger.info(f"# Updating goal to {new_goal}")
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
-    with servo_lock:
-        current_goal = (1 - new_goal) * 180
+
+    # Convert normalized position (0-1) to inverted angle (1=0°, 0=180°)
+    angle = (1 - new_goal) * 180
+
+    try:
+        # Send request to servo API
+        response = requests.post(f"{servo_api_url}/move",
+                               json={"angle": angle},
+                               timeout=0.1)
+        if response.status_code != 200:
+            logger.warning(f"Servo API error: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Failed to update servo: {e}")
+
     # Update the bar if it exists
     if bar is not None:
         bar.n = int(new_goal * 100)
         bar.refresh()
-    # logger.info(f"Updated goal to {current_goal} degrees")
+    # logger.info(f"Updated goal to {angle} degrees")
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     print(f"Processing camera feed, sending requests to server (infinite loop, Ctrl+C to stop)")
@@ -109,18 +101,26 @@ async def main():
     output_dir = 'camera_output'
     enable_depth = False
 
-    logger.info("Initializing servo")
-    kit = ServoKit(channels=16, address=0x42)
-    head_servo = kit.servo[0]
-    head_servo.angle = 90
+    logger.info("Initializing servo via API")
+    try:
+        # Initialize servo to center position via API
+        response = requests.post(f"{servo_api_url}/move",
+                               json={"angle": 90},
+                               timeout=2.0)
+        if response.status_code == 200:
+            logger.info("Servo initialized to center position")
+        else:
+            logger.error(f"Failed to initialize servo: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Cannot connect to servo API: {e}")
+        logger.error("Make sure servo_api.py is running on localhost:8000")
+        return
 
     # Initialize tqdm bar for goal (0 to 1, 100 steps)
     bar = tqdm(total=100, desc='Goal', position=0, leave=True, bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
     bar.n = 0
     bar.refresh()
 
-    logger.info("Starting smooth servo movement task")
-    move_task = asyncio.create_task(smooth_move(head_servo))
     try:
         logger.info(f"Starting camera feed")
         fps, total_time, server_times = await process_camera_feed(
@@ -134,9 +134,13 @@ async def main():
     except Exception as e:
         logger.error(f"Error: {str(e)}")
     finally:
-        move_task.cancel()
-        with servo_lock:
-            head_servo.angle = None
+        # Stop servo movement via API
+        try:
+            requests.post(f"{servo_api_url}/stop", timeout=1.0)
+            logger.info("Servo stopped")
+        except requests.exceptions.RequestException:
+            logger.warning("Could not stop servo via API")
+
         if bar is not None:
             bar.close()
         await asyncio.sleep(0.1)
