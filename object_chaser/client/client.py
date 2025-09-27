@@ -49,6 +49,7 @@ def update_goal(new_goal):
         bar.n = int(new_goal * 100)
         bar.refresh()
     # logger.info(f"Updated goal to {target_angle} degrees")
+    time.sleep(2) # Debugging delay to avoid too rapid commands
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     print(f"Processing camera feed, sending requests to server (infinite loop, Ctrl+C to stop)")
