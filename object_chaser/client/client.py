@@ -73,6 +73,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 best_person = max(person_detections, key=lambda d: d['confidence'])
                                 x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2 # Left + width/2
                                 x_normalized = x_middle / color_image.shape[1] # between 0=left and 1=right
+                                logger.info(f"Best person detection: {best_person}, x_normalized={x_normalized:.2f}")
                                 
                                 servo_range = 180
                                 response = requests.get(f"{servo_api_url}/status", timeout=0.1)
@@ -85,7 +86,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                     logger.warning(f"Response content: {response.content}")
                                     current_servo_angle = 90 # Default to center if error
                                 fov = 87 # Realsense D435 horizontal FOV
-                                x_normalized = x_normalized * (fov/servo_range)
+                                # x_normalized = x_normalized * (fov/servo_range)
                                 
                                 update_goal(x_normalized)
                             annotated_image = color_image.copy()
