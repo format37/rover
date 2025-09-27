@@ -31,24 +31,13 @@ def update_goal(new_goal):
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
 
-    # Convert normalized position (0-1) to angle with damping (move half the distance)
+    # Convert normalized position (0-1) to absolute target angle (like old current_goal)
     target_angle = (1 - new_goal) * 180
-    # Get current servo position to calculate relative movement
-    try:
-        status_response = requests.get(f"{servo_api_url}/status", timeout=0.1)
-        if status_response.status_code == 200:
-            current_angle = status_response.json()["current_position"]
-            # Move halfway toward target
-            angle = current_angle + (target_angle - current_angle) * 0.5
-        else:
-            angle = target_angle
-    except requests.exceptions.RequestException:
-        angle = target_angle
 
     try:
-        # Send request to servo API
+        # Send absolute target to servo API (let servo API handle smooth movement)
         response = requests.post(f"{servo_api_url}/move",
-                               json={"angle": angle},
+                               json={"angle": target_angle},
                                timeout=0.1)
         if response.status_code != 200:
             logger.warning(f"Servo API error: {response.status_code}")
@@ -59,7 +48,7 @@ def update_goal(new_goal):
     if bar is not None:
         bar.n = int(new_goal * 100)
         bar.refresh()
-    # logger.info(f"Updated goal to {angle} degrees")
+    # logger.info(f"Updated goal to {target_angle} degrees")
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     print(f"Processing camera feed, sending requests to server (infinite loop, Ctrl+C to stop)")
