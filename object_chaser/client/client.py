@@ -32,7 +32,7 @@ def update_goal(new_goal):
         return
     # Convert normalized position (0-1) to absolute target angle (like old current_goal)
     # target_angle = (1 - new_goal) * 180  # 0=left(180°), 1=right(0°)
-    target_angle = new_goal * 180 # 0=left(0°), 1=right(180°)
+    target_angle = new_goal * 180 # 0=right(0°), 1=left(180°)
 
     try:
         # Send absolute target to servo API (let servo API handle smooth movement)
@@ -97,6 +97,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 new_goal_angle = cam_compensation * servo_cam_multiplier
                                 logger.info(f"New goal (degrees): {new_goal_angle:.2f}")
                                 new_goal = (new_goal_angle / servo_range)  # Convert back to normalized 0-1
+                                logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
                                 
                                 update_goal(new_goal)
                             annotated_image = color_image.copy()
