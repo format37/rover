@@ -85,6 +85,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                     current_servo_angle = status.get('current_position')
                                     logger.info(f"Current servo angle: {current_servo_angle}")
                                     servo_status = status.get('status')
+                                    logger.info(f"Servo status: {servo_status}")
                                 else:
                                     logger.warning(f"Failed to get servo status: {response.status_code}")
                                     logger.warning(f"Response content: {response.content}")
@@ -127,6 +128,19 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     fps = request_count / total_time if total_time > 0 else 0
     return fps, total_time, server_times
 
+async def servo_set_speed(steps_per_second):
+    try:
+        response = requests.post(f"{servo_api_url}/speed",
+                                 json={"steps_per_second": steps_per_second},
+                                 timeout=0.1)
+        if response.status_code == 200:
+            result = response.json()
+            logger.info(f"Servo speed set: {result}")
+        else:
+            logger.warning(f"Failed to set servo speed: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Error setting servo speed: {e}")
+
 async def main():
     global bar
     server_url = 'http://localhost:8765'
@@ -152,6 +166,8 @@ async def main():
     bar = tqdm(total=100, desc='Goal', position=0, leave=True, bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
     bar.n = 0
     bar.refresh()
+
+    await servo_set_speed(200)  # Set speed to 90 steps/sec
 
     try:
         logger.info(f"Starting camera feed")
