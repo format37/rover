@@ -2,15 +2,23 @@
 ```
 sudo apt-get install python3-setuptools python3-pip libjpeg-dev zlib1g-dev
 ```
-# YOLO server
+# Running
+To run the Object chaser u need to run 3 processes simultaneously:
+* Yolo server
+* Servo server
+* Client
+## YOLO server
 ```
 cd ~/projects/rover/object_chaser/server/
 python3.6 yolo_server.py
 ```
-# Servo server
+## Servo server
+```
+cd ~/projects/rover/object_chaser/server/
+python3.8 servo_api.py
+```
+## Client
 ```
 cd ~/projects/rover/object_chaser/client/
-<!-- uvicorn servo_server:app --host 0.0.0.0 --port 5000 -->
-
+python3.8 client.py
 ```
-# 

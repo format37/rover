@@ -1,3 +1,4 @@
+# uvicorn servo_server:app --host 0.0.0.0 --port 5000
 import asyncio
 from fastapi import FastAPI
 from adafruit_servokit import ServoKit
