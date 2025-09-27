@@ -87,9 +87,16 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                     logger.warning(f"Response content: {response.content}")
                                     current_servo_angle = 90 # Default to center if error
                                 fov = 87 # Realsense D435 horizontal FOV
-                                # x_normalized = x_normalized * (fov/servo_range)
+                                cam_center = fov / 2
+                                logger.info(f"Camera FOV: {fov}, center: {cam_center}")
+                                cam_compensation = cam_center - fov * x_normalized
+                                logger.info(f"Camera compensation (degrees): {cam_compensation:.2f}")
+                                servo_cam_multiplier = fov / servo_range
+                                logger.info(f"Servo-Cam multiplier: {servo_cam_multiplier:.2f}")
+                                new_goal = cam_compensation * servo_cam_multiplier
+                                logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
                                 
-                                update_goal(x_normalized)
+                                update_goal(new_goal)
                             annotated_image = color_image.copy()
                             for detection in result['detections']:
                                 x, y, w, h = detection['bbox']
