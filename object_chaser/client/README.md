@@ -1,4 +1,11 @@
 Client should be runned with python3.8 to access to Realsense depth camera.
+# Python installaion
+```
+
+sudo apt install python3.8-dev
+```
+
+# Requirements
 ```
 python3.8 -m pip install -r requirements.txt
 python3.8 yolo_client.py
