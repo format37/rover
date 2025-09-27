@@ -80,6 +80,10 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                     status = response.json()
                                     current_servo_angle = status.get('current_angle')
                                     logger.info(f"Current servo angle: {current_servo_angle}")
+                                else:
+                                    logger.warning(f"Failed to get servo status: {response.status_code}")
+                                    logger.warning(f"Response content: {response.content}")
+                                    current_servo_angle = 90 # Default to center if error
                                 fov = 87 # Realsense D435 horizontal FOV
                                 x_normalized = x_normalized * (fov/servo_range)
                                 
