@@ -78,7 +78,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 response = requests.get(f"{servo_api_url}/status", timeout=0.1)
                                 if response.status_code == 200:
                                     status = response.json()
-                                    current_servo_angle = status.get('current_angle')
+                                    current_servo_angle = status.get('current_position')
                                     logger.info(f"Current servo angle: {current_servo_angle}")
                                 else:
                                     logger.warning(f"Failed to get servo status: {response.status_code}")
