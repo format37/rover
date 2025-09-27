@@ -30,10 +30,8 @@ def update_goal(new_goal):
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
-
-    fov = 87 # Realsense D435 horizontal FOV
     # Convert normalized position (0-1) to absolute target angle (like old current_goal)
-    target_angle = (1 - new_goal) * 180
+    target_angle = (1 - new_goal) * 180  # 0=left(180°), 1=right(0°)
 
     try:
         # Send absolute target to servo API (let servo API handle smooth movement)
@@ -73,8 +71,18 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                             person_detections = [d for d in result['detections'] if d['label'] == 'person']
                             if person_detections:
                                 best_person = max(person_detections, key=lambda d: d['confidence'])
-                                x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2
-                                x_normalized = x_middle / color_image.shape[1]
+                                x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2 # Left + width/2
+                                x_normalized = x_middle / color_image.shape[1] # between 0=left and 1=right
+                                
+                                servo_range = 180
+                                response = requests.post(f"{servo_api_url}/status", timeout=0.1)
+                                if response.status_code == 200:
+                                    status = response.json()
+                                    current_servo_angle = status.get('current_angle')
+                                    logger.info(f"Current servo angle: {current_servo_angle}")
+                                fov = 87 # Realsense D435 horizontal FOV
+                                x_normalized = x_normalized * (fov/servo_range)
+                                
                                 update_goal(x_normalized)
                             annotated_image = color_image.copy()
                             for detection in result['detections']:
