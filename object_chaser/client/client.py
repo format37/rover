@@ -49,7 +49,7 @@ def update_goal(new_goal):
         bar.n = int(new_goal * 100)
         bar.refresh()
     # logger.info(f"Updated goal to {target_angle} degrees")
-    time.sleep(2) # Debugging delay to avoid too rapid commands
+    # time.sleep(2) # Debugging delay to avoid too rapid commands
 
 async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
     print(f"Processing camera feed, sending requests to server (infinite loop, Ctrl+C to stop)")
@@ -91,17 +91,18 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 fov = 87  # Realsense D435 horizontal FOV
                                 camera_offset = (x_normalized - 0.5) * fov
                                 logger.info(f"Camera FOV: {fov}, offset from center (degrees): {camera_offset:.2f}")
-                                new_goal_angle = current_servo_angle + camera_offset
-                                logger.info(f"New goal before clamp (degrees): {new_goal_angle:.2f}")
-                                new_goal_angle = max(0, min(servo_range, new_goal_angle))
-                                if new_goal_angle != current_servo_angle + camera_offset:
-                                    logger.info(
-                                        f"New goal clamped to servo range 0-{servo_range} degrees: {new_goal_angle:.2f}"
-                                    )
-                                new_goal = new_goal_angle / servo_range  # Convert back to normalized 0-1
-                                logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
-                                
-                                update_goal(new_goal)
+                                if abs(camera_offset) > 5:  # Only update if offset is significant (>5 degrees)
+                                    new_goal_angle = current_servo_angle + camera_offset
+                                    logger.info(f"New goal before clamp (degrees): {new_goal_angle:.2f}")
+                                    new_goal_angle = max(0, min(servo_range, new_goal_angle))
+                                    if new_goal_angle != current_servo_angle + camera_offset:
+                                        logger.info(
+                                            f"New goal clamped to servo range 0-{servo_range} degrees: {new_goal_angle:.2f}"
+                                        )
+                                    new_goal = new_goal_angle / servo_range  # Convert back to normalized 0-1
+                                    logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
+                                    
+                                    update_goal(new_goal)
                             annotated_image = color_image.copy()
                             for detection in result['detections']:
                                 x, y, w, h = detection['bbox']
