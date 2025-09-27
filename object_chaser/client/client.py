@@ -93,8 +93,9 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 logger.info(f"Camera compensation (degrees): {cam_compensation:.2f}")
                                 servo_cam_multiplier = fov / servo_range
                                 logger.info(f"Servo-Cam multiplier: {servo_cam_multiplier:.2f}")
-                                new_goal = cam_compensation * servo_cam_multiplier
-                                logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
+                                new_goal_angle = cam_compensation * servo_cam_multiplier
+                                logger.info(f"New goal (degrees): {new_goal_angle:.2f}")
+                                new_goal = (new_goal_angle / servo_range)  # Convert back to normalized 0-1
                                 
                                 update_goal(new_goal)
                             annotated_image = color_image.copy()
