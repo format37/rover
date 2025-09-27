@@ -87,16 +87,17 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                     logger.warning(f"Failed to get servo status: {response.status_code}")
                                     logger.warning(f"Response content: {response.content}")
                                     current_servo_angle = 90 # Default to center if error
-                                fov = 87 # Realsense D435 horizontal FOV
-                                cam_center = fov / 2
-                                logger.info(f"Camera FOV: {fov}, center: {cam_center}")
-                                cam_compensation = cam_center - fov * x_normalized
-                                logger.info(f"Camera compensation (degrees): {cam_compensation:.2f}")
-                                servo_cam_multiplier = fov / servo_range
-                                logger.info(f"Servo-Cam multiplier: {servo_cam_multiplier:.2f}")
-                                new_goal_angle = cam_compensation * servo_cam_multiplier
-                                logger.info(f"New goal (degrees): {new_goal_angle:.2f}")
-                                new_goal = (new_goal_angle / servo_range)  # Convert back to normalized 0-1
+                                fov = 87  # Realsense D435 horizontal FOV
+                                camera_offset = (x_normalized - 0.5) * fov
+                                logger.info(f"Camera FOV: {fov}, offset from center (degrees): {camera_offset:.2f}")
+                                new_goal_angle = current_servo_angle + camera_offset
+                                logger.info(f"New goal before clamp (degrees): {new_goal_angle:.2f}")
+                                new_goal_angle = max(0, min(servo_range, new_goal_angle))
+                                if new_goal_angle != current_servo_angle + camera_offset:
+                                    logger.info(
+                                        f"New goal clamped to servo range 0-{servo_range} degrees: {new_goal_angle:.2f}"
+                                    )
+                                new_goal = new_goal_angle / servo_range  # Convert back to normalized 0-1
                                 logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
                                 
                                 update_goal(new_goal)
