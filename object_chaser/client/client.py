@@ -31,8 +31,19 @@ def update_goal(new_goal):
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
 
-    # Convert normalized position (0-1) to angle (0=0°, 1=180°)
-    angle = (1 - new_goal) * 180
+    # Convert normalized position (0-1) to angle with damping (move half the distance)
+    target_angle = (1 - new_goal) * 180
+    # Get current servo position to calculate relative movement
+    try:
+        status_response = requests.get(f"{servo_api_url}/status", timeout=0.1)
+        if status_response.status_code == 200:
+            current_angle = status_response.json()["current_position"]
+            # Move halfway toward target
+            angle = current_angle + (target_angle - current_angle) * 0.5
+        else:
+            angle = target_angle
+    except requests.exceptions.RequestException:
+        angle = target_angle
 
     try:
         # Send request to servo API
