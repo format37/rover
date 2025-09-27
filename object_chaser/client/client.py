@@ -75,7 +75,7 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                 x_normalized = x_middle / color_image.shape[1] # between 0=left and 1=right
                                 
                                 servo_range = 180
-                                response = requests.post(f"{servo_api_url}/status", timeout=0.1)
+                                response = requests.get(f"{servo_api_url}/status", timeout=0.1)
                                 if response.status_code == 200:
                                     status = response.json()
                                     current_servo_angle = status.get('current_angle')
