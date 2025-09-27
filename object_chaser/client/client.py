@@ -22,14 +22,21 @@ servo_api_url = 'http://localhost:8000'
 
 # Global bar for goal progress
 bar = None
+last_servo_update_time = None
 
 
 def update_goal(new_goal):
-    global bar
+    global bar, last_servo_update_time
     logger.info(f"# Updating goal to {new_goal}")
     if not 0 <= new_goal <= 1:
         print(f"Error: Goal {new_goal} must be between 0 and 1")
         return
+    now = time.monotonic()
+    if last_servo_update_time is not None:
+        elapsed = now - last_servo_update_time
+        if elapsed < 2.0:
+            logger.info(f"Skipping servo update; only {elapsed:.2f}s since last command")
+            return
     # Convert normalized position (0-1) to absolute target angle (like old current_goal)
     # target_angle = (1 - new_goal) * 180  # 0=left(180°), 1=right(0°)
     target_angle = new_goal * 180 # 0=right(0°), 1=left(180°)
@@ -41,8 +48,10 @@ def update_goal(new_goal):
                                timeout=0.1)
         if response.status_code != 200:
             logger.warning(f"Servo API error: {response.status_code}")
+        last_servo_update_time = now
     except requests.exceptions.RequestException as e:
         logger.warning(f"Failed to update servo: {e}")
+        last_servo_update_time = now
 
     # Update the bar if it exists
     if bar is not None:
@@ -104,10 +113,12 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                                     new_goal = new_goal_angle / servo_range  # Convert back to normalized 0-1
                                     logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
                                     
+
                                     if servo_status == 'moving':
                                         logger.info("Servo is currently moving, skipping goal update to avoid overload")
                                     else:
                                         update_goal(new_goal)
+
                             annotated_image = color_image.copy()
                             for detection in result['detections']:
                                 x, y, w, h = detection['bbox']
