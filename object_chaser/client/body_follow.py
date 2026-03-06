@@ -42,7 +42,15 @@ DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by this fraction on each side to av
 HEAD_OFFSET_THRESHOLD = 10    # Minimum camera offset (degrees) to trigger head movement
 SERVO_UPDATE_INTERVAL = 2.0   # Minimum seconds between servo updates
 
+# Search mode parameters
+SEARCH_TIMEOUT = 10.0          # Start searching after this many seconds without detection
+SEARCH_WAIT_DURATION = 10.0    # Pause at forward position before repeating search cycle
+SEARCH_ANGLES = [170, 10, 90]  # Left, right, forward (degrees) - avoid mechanical limits
+
 last_servo_update_time = None
+last_detection_time = None
+search_phase = -1              # -1 = not searching, 0/1/2 = search angles, 3 = waiting
+search_phase_start_time = None
 
 
 def get_servo_status():
@@ -176,6 +184,79 @@ def move_forward():
     return True
 
 
+def search_step():
+    """Advance the search state machine. Returns True if actively searching."""
+    global search_phase, search_phase_start_time
+
+    now = time.monotonic()
+
+    # First entry into search mode
+    if search_phase == -1:
+        search_phase = 0
+        search_phase_start_time = now
+        logger.info("Search mode: starting scan")
+
+    # Phases 0-2: move head to search angles
+    if search_phase < len(SEARCH_ANGLES):
+        status = get_servo_status()
+        if status and status.get('status') == 'arrived':
+            # Already at target or just starting - check if we've been here long enough
+            elapsed = now - search_phase_start_time
+            if elapsed > 1.0:  # Give at least 1s at each position for detection
+                search_phase += 1
+                search_phase_start_time = now
+                if search_phase < len(SEARCH_ANGLES):
+                    angle = SEARCH_ANGLES[search_phase]
+                    logger.info(f"Search mode: moving head to {angle} degrees (phase {search_phase})")
+                    try:
+                        requests.post(f"{servo_api_url}/move",
+                                      json={"angle": angle}, timeout=0.1)
+                    except requests.exceptions.RequestException:
+                        pass
+                return True
+
+        # Send the move command if we haven't yet for this phase
+        if search_phase_start_time == now:
+            angle = SEARCH_ANGLES[search_phase]
+            logger.info(f"Search mode: moving head to {angle} degrees (phase {search_phase})")
+            try:
+                requests.post(f"{servo_api_url}/move",
+                              json={"angle": angle}, timeout=0.1)
+            except requests.exceptions.RequestException:
+                pass
+        return True
+
+    # Phase 3: wait at forward position
+    elapsed = now - search_phase_start_time
+    if elapsed < SEARCH_WAIT_DURATION:
+        remaining = SEARCH_WAIT_DURATION - elapsed
+        if int(remaining) != int(remaining + 1):  # Log once per second
+            logger.info(f"Search mode: waiting ({remaining:.0f}s remaining)")
+        return True
+
+    # Restart search cycle
+    logger.info("Search mode: restarting scan cycle")
+    search_phase = 0
+    search_phase_start_time = now
+    angle = SEARCH_ANGLES[0]
+    try:
+        requests.post(f"{servo_api_url}/move",
+                      json={"angle": angle}, timeout=0.1)
+    except requests.exceptions.RequestException:
+        pass
+    return True
+
+
+def reset_search():
+    """Reset search state when object is found."""
+    global search_phase, search_phase_start_time, last_detection_time
+    if search_phase != -1:
+        logger.info("Search mode: object found, resuming tracking")
+    search_phase = -1
+    search_phase_start_time = None
+    last_detection_time = time.monotonic()
+
+
 def stop_body():
     """Stop all track movement"""
     try:
@@ -190,6 +271,9 @@ async def process_camera_feed(server_url, label='person', output_dir='.'):
     server_times = []
     start_time = time.time()
     request_count = 0
+
+    global last_detection_time
+    last_detection_time = time.monotonic()
 
     async with CameraController(output_dir=output_dir, enable_depth=True) as camera:
         depth_scale = camera.depth_scale
@@ -210,6 +294,7 @@ async def process_camera_feed(server_url, label='person', output_dir='.'):
                             label_detections = [d for d in result['detections'] if d['label'] == label]
 
                             if label_detections:
+                                reset_search()
                                 best = max(label_detections, key=lambda d: d['confidence'])
                                 x_middle = best['bbox'][0] + best['bbox'][2] / 2
                                 x_normalized = x_middle / color_image.shape[1]
@@ -252,7 +337,15 @@ async def process_camera_feed(server_url, label='person', output_dir='.'):
                                             logger.warning("No valid depth data, skipping forward movement")
 
                             else:
-                                logger.info(f"No '{label}' detected")
+                                # No detection - check if we should enter search mode
+                                now = time.monotonic()
+                                if last_detection_time is None:
+                                    last_detection_time = now
+                                no_detect_duration = now - last_detection_time
+                                if no_detect_duration > SEARCH_TIMEOUT:
+                                    search_step()
+                                else:
+                                    logger.info(f"No '{label}' detected ({no_detect_duration:.1f}s)")
 
                             # Draw annotations
                             annotated_image = color_image.copy()
