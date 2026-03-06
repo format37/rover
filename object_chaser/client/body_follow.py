@@ -24,8 +24,8 @@ SERVO_RANGE = 180
 # Body rotation thresholds and parameters
 BODY_ROTATE_THRESHOLD = 20.0  # Start body rotation when head deviates this many degrees from center
 BODY_ROTATE_DEADZONE = 8.0    # Stop body rotation when within this many degrees of center
-MIN_TRACK_SPEED = 0.03        # Minimum track speed for rotation
-MAX_TRACK_SPEED = 0.08        # Maximum track speed for rotation
+MIN_TRACK_SPEED = 0.1        # Minimum track speed for rotation
+MAX_TRACK_SPEED = 0.2        # Maximum track speed for rotation
 BODY_ROTATE_DURATION = 0.3    # Duration of each rotation pulse (seconds)
 
 # Head tracking parameters
