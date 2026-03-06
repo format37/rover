@@ -31,8 +31,9 @@ BODY_ROTATE_DURATION = 0.3    # Duration of each rotation pulse (seconds)
 
 # Forward movement parameters
 FORWARD_HEAD_THRESHOLD = 30.0  # Head must be within this many degrees of center to move forward
-FORWARD_SPEED = 0.05           # Track speed when moving forward
-FORWARD_DURATION = 0.3         # Duration of each forward pulse (seconds)
+FORWARD_SPEED = 0.05           # Base track speed when moving forward
+FORWARD_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (safety)
+STEERING_FACTOR = 0.6          # How much to steer based on object offset (0=none, 1=full)
 
 # Depth / collision avoidance parameters
 STOP_DISTANCE = 0.8            # Stop moving forward when object is closer than this (meters)
@@ -50,6 +51,7 @@ SEARCH_ANGLES = [90, 45, 0, 135, 180, 135, 90, 45, 0, 45, 90]
 
 last_servo_update_time = None
 last_detection_time = None
+is_driving = False
 search_phase = -1              # -1 = not searching, 0..N = index in SEARCH_ANGLES, len = waiting
 search_phase_start_time = None
 search_command_sent = False
@@ -165,25 +167,44 @@ def estimate_distance(depth_image, depth_scale, bbox):
     return distance
 
 
-def move_forward():
-    """Move forward in a short pulse. Returns True if command sent."""
-    logger.info(f"Moving forward: speed={FORWARD_SPEED}, duration={FORWARD_DURATION}")
+def drive_toward(x_normalized):
+    """Drive forward with differential steering based on object position.
+    x_normalized: 0=right, 1=left (inverted camera coords).
+    Refreshes safety timeout each call so tracks run continuously."""
+    global is_driving
+    # Steering: offset from center, positive = object is left
+    offset = x_normalized - 0.5  # range -0.5 to 0.5
+    steering = offset * STEERING_FACTOR
+
+    # Differential speed: slow the inner track to steer toward the object
+    # Object left (offset>0): slow left track → turn left
+    # Object right (offset<0): slow right track → turn right
+    left_speed = FORWARD_SPEED * (1 - steering)
+    right_speed = FORWARD_SPEED * (1 + steering)
+
+    # Clamp speeds to valid range
+    left_speed = max(0.01, min(1.0, left_speed))
+    right_speed = max(0.01, min(1.0, right_speed))
+
+    if not is_driving:
+        logger.info(f"Driving: starting continuous forward movement")
+        is_driving = True
+    logger.info(f"Driving: L={left_speed:.3f} R={right_speed:.3f} (offset={offset:+.2f})")
+
     try:
         # Forward: track0 dir=0, track1 dir=1 (from move.py)
+        # Safety timeout auto-stops if client crashes / stops sending
         response = requests.post(f"{servo_api_url}/tracks/move",
-                                 json={"left_speed": FORWARD_SPEED,
+                                 json={"left_speed": left_speed,
                                         "left_dir": 0,
-                                        "right_speed": FORWARD_SPEED,
+                                        "right_speed": right_speed,
                                         "right_dir": 1,
-                                        "duration": FORWARD_DURATION},
+                                        "duration": FORWARD_SAFETY_TIMEOUT},
                                  timeout=0.5)
         if response.status_code != 200:
-            logger.warning(f"Forward move error: {response.status_code}")
-            return False
+            logger.warning(f"Drive error: {response.status_code}")
     except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to move forward: {e}")
-        return False
-    return True
+        logger.warning(f"Failed to drive: {e}")
 
 
 def search_step():
@@ -252,6 +273,10 @@ def reset_search():
 
 def stop_body():
     """Stop all track movement"""
+    global is_driving
+    if is_driving:
+        logger.info("Driving: stopped")
+    is_driving = False
     try:
         requests.post(f"{servo_api_url}/tracks/stop", timeout=0.5)
     except requests.exceptions.RequestException:
@@ -325,15 +350,22 @@ async def process_camera_feed(server_url, label='person', output_dir='.'):
                                         if distance is not None:
                                             logger.info(f"Distance to '{label}': {distance:.2f}m")
                                             if distance > STOP_DISTANCE:
-                                                move_forward()
+                                                drive_toward(x_normalized)
                                             else:
                                                 logger.info(f"Too close ({distance:.2f}m < {STOP_DISTANCE}m), stopping")
                                                 stop_body()
                                         else:
                                             logger.warning("No valid depth data, skipping forward movement")
+                                    else:
+                                        # Head too far off center — stop driving, rotate only
+                                        if is_driving:
+                                            stop_body()
 
                             else:
-                                # No detection - check if we should enter search mode
+                                # No detection — stop driving immediately
+                                if is_driving:
+                                    stop_body()
+                                # Check if we should enter search mode
                                 now = time.monotonic()
                                 if last_detection_time is None:
                                     last_detection_time = now
