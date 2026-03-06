@@ -24,9 +24,14 @@ SERVO_RANGE = 180
 # Body rotation thresholds and parameters
 BODY_ROTATE_THRESHOLD = 20.0  # Start body rotation when head deviates this many degrees from center
 BODY_ROTATE_DEADZONE = 8.0    # Stop body rotation when within this many degrees of center
-MIN_TRACK_SPEED = 0.1        # Minimum track speed for rotation
-MAX_TRACK_SPEED = 0.2        # Maximum track speed for rotation
+MIN_TRACK_SPEED = 0.03        # Minimum track speed for rotation
+MAX_TRACK_SPEED = 0.08        # Maximum track speed for rotation
 BODY_ROTATE_DURATION = 0.3    # Duration of each rotation pulse (seconds)
+
+# Forward movement parameters
+FORWARD_HEAD_THRESHOLD = 15.0  # Head must be within this many degrees of center to move forward
+FORWARD_SPEED = 0.05           # Track speed when moving forward
+FORWARD_DURATION = 0.3         # Duration of each forward pulse (seconds)
 
 # Head tracking parameters
 HEAD_OFFSET_THRESHOLD = 10    # Minimum camera offset (degrees) to trigger head movement
@@ -114,8 +119,29 @@ def rotate_body(servo_angle):
     return True
 
 
+def move_forward():
+    """Move forward in a short pulse. Returns True if command sent."""
+    logger.info(f"Moving forward: speed={FORWARD_SPEED}, duration={FORWARD_DURATION}")
+    try:
+        # Forward: track0 dir=0, track1 dir=1 (from move.py)
+        response = requests.post(f"{servo_api_url}/tracks/move",
+                                 json={"left_speed": FORWARD_SPEED,
+                                        "left_dir": 0,
+                                        "right_speed": FORWARD_SPEED,
+                                        "right_dir": 1,
+                                        "duration": FORWARD_DURATION},
+                                 timeout=0.5)
+        if response.status_code != 200:
+            logger.warning(f"Forward move error: {response.status_code}")
+            return False
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Failed to move forward: {e}")
+        return False
+    return True
+
+
 def stop_body():
-    """Stop body rotation"""
+    """Stop all track movement"""
     try:
         requests.post(f"{servo_api_url}/tracks/stop", timeout=0.5)
     except requests.exceptions.RequestException:
@@ -171,11 +197,12 @@ async def process_camera_feed(server_url, label='person', output_dir='.', enable
                                             update_head(new_goal)
 
                                     # --- Step 2: Body rotation to re-center head ---
-                                    if abs(current_servo_angle - SERVO_CENTER) > BODY_ROTATE_THRESHOLD:
+                                    head_deviation = abs(current_servo_angle - SERVO_CENTER)
+                                    if head_deviation > BODY_ROTATE_THRESHOLD:
                                         rotate_body(current_servo_angle)
-                                    else:
-                                        # Within deadzone - no body rotation needed
-                                        pass
+                                    # --- Step 3: Move forward when facing the object ---
+                                    elif head_deviation < FORWARD_HEAD_THRESHOLD:
+                                        move_forward()
 
                             else:
                                 logger.info(f"No '{label}' detected")
