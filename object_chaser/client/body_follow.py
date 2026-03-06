@@ -6,6 +6,7 @@ from camera_controls import CameraController
 import cv2
 import logging
 import aiohttp
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,6 +33,10 @@ BODY_ROTATE_DURATION = 0.3    # Duration of each rotation pulse (seconds)
 FORWARD_HEAD_THRESHOLD = 15.0  # Head must be within this many degrees of center to move forward
 FORWARD_SPEED = 0.05           # Track speed when moving forward
 FORWARD_DURATION = 0.3         # Duration of each forward pulse (seconds)
+
+# Depth / collision avoidance parameters
+STOP_DISTANCE = 0.8            # Stop moving forward when object is closer than this (meters)
+DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by this fraction on each side to avoid edge noise
 
 # Head tracking parameters
 HEAD_OFFSET_THRESHOLD = 10    # Minimum camera offset (degrees) to trigger head movement
@@ -119,6 +124,37 @@ def rotate_body(servo_angle):
     return True
 
 
+def estimate_distance(depth_image, depth_scale, bbox):
+    """Estimate distance to object using depth data within its bounding box.
+    Returns distance in meters, or None if depth data is unavailable."""
+    if depth_image is None:
+        return None
+
+    x, y, w, h = bbox
+    img_h, img_w = depth_image.shape[:2]
+
+    # Shrink bbox inward to avoid noisy edges
+    margin_x = int(w * DEPTH_BBOX_SHRINK)
+    margin_y = int(h * DEPTH_BBOX_SHRINK)
+    x1 = max(0, x + margin_x)
+    y1 = max(0, y + margin_y)
+    x2 = min(img_w, x + w - margin_x)
+    y2 = min(img_h, y + h - margin_y)
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    region = depth_image[y1:y2, x1:x2]
+    # Filter out zero (invalid) depth values
+    valid = region[region > 0]
+    if len(valid) == 0:
+        return None
+
+    # Median is robust against outliers
+    distance = float(np.median(valid)) * depth_scale
+    return distance
+
+
 def move_forward():
     """Move forward in a short pulse. Returns True if command sent."""
     logger.info(f"Moving forward: speed={FORWARD_SPEED}, duration={FORWARD_DURATION}")
@@ -148,14 +184,16 @@ def stop_body():
         pass
 
 
-async def process_camera_feed(server_url, label='person', output_dir='.', enable_depth=False):
-    print(f"Body follow mode: tracking label='{label}' (Ctrl+C to stop)")
+async def process_camera_feed(server_url, label='person', output_dir='.'):
+    print(f"Body follow mode: tracking label='{label}', depth enabled (Ctrl+C to stop)")
     url = f"{server_url}/detect/"
     server_times = []
     start_time = time.time()
     request_count = 0
 
-    async with CameraController(output_dir=output_dir, enable_depth=enable_depth) as camera:
+    async with CameraController(output_dir=output_dir, enable_depth=True) as camera:
+        depth_scale = camera.depth_scale
+        logger.info(f"Depth scale: {depth_scale}")
         async with aiohttp.ClientSession() as session:
             try:
                 while True:
@@ -202,7 +240,16 @@ async def process_camera_feed(server_url, label='person', output_dir='.', enable
                                         rotate_body(current_servo_angle)
                                     # --- Step 3: Move forward when facing the object ---
                                     elif head_deviation < FORWARD_HEAD_THRESHOLD:
-                                        move_forward()
+                                        distance = estimate_distance(depth_image, depth_scale, best['bbox'])
+                                        if distance is not None:
+                                            logger.info(f"Distance to '{label}': {distance:.2f}m")
+                                            if distance > STOP_DISTANCE:
+                                                move_forward()
+                                            else:
+                                                logger.info(f"Too close ({distance:.2f}m < {STOP_DISTANCE}m), stopping")
+                                                stop_body()
+                                        else:
+                                            logger.warning("No valid depth data, skipping forward movement")
 
                             else:
                                 logger.info(f"No '{label}' detected")
@@ -237,7 +284,6 @@ async def main():
 
     server_url = 'http://localhost:8765'
     output_dir = 'camera_output'
-    enable_depth = False
 
     logger.info("Initializing servo via API")
     try:
@@ -266,8 +312,7 @@ async def main():
         fps, total_time, server_times = await process_camera_feed(
             server_url,
             label=args.label,
-            output_dir=output_dir,
-            enable_depth=enable_depth
+            output_dir=output_dir
         )
         logger.info(f"Total time: {total_time:.2f}s, Average FPS: {fps:.2f}")
     except Exception as e:
