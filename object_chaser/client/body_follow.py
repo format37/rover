@@ -92,9 +92,9 @@ def rotate_body(servo_angle):
     # If head looks left (deviation>0), we need body to rotate left -> direction=0 for both
     # If head looks right (deviation<0), we need body to rotate right -> direction=1 for both
     if deviation > 0:
-        rotate_dir = 0  # rotate body left
+        rotate_dir = 1  # rotate body left
     else:
-        rotate_dir = 1  # rotate body right
+        rotate_dir = 0  # rotate body right
 
     logger.info(f"Body rotate: deviation={deviation:.1f}, speed={track_speed:.3f}, dir={rotate_dir}")
 
