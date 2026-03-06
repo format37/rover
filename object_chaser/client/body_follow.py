@@ -44,13 +44,15 @@ SERVO_UPDATE_INTERVAL = 2.0   # Minimum seconds between servo updates
 
 # Search mode parameters
 SEARCH_TIMEOUT = 10.0          # Start searching after this many seconds without detection
-SEARCH_WAIT_DURATION = 10.0    # Pause at forward position before repeating search cycle
-SEARCH_ANGLES = [170, 10, 90]  # Left, right, forward (degrees) - avoid mechanical limits
+SEARCH_WAIT_DURATION = 10.0    # Pause at center after full sweep before repeating
+# Sweep: center → left in 45° steps → right in 45° steps → back to center
+SEARCH_ANGLES = [90, 45, 0, 135, 180, 135, 90, 45, 0, 45, 90]
 
 last_servo_update_time = None
 last_detection_time = None
-search_phase = -1              # -1 = not searching, 0/1/2 = search angles, 3 = waiting
+search_phase = -1              # -1 = not searching, 0..N = index in SEARCH_ANGLES, len = waiting
 search_phase_start_time = None
+search_command_sent = False
 
 
 def get_servo_status():
@@ -185,8 +187,8 @@ def move_forward():
 
 
 def search_step():
-    """Advance the search state machine. Returns True if actively searching."""
-    global search_phase, search_phase_start_time
+    """Advance the search state machine. At each angle: move, wait for arrival, dwell for YOLO."""
+    global search_phase, search_phase_start_time, search_command_sent
 
     now = time.monotonic()
 
@@ -194,66 +196,57 @@ def search_step():
     if search_phase == -1:
         search_phase = 0
         search_phase_start_time = now
-        logger.info("Search mode: starting scan")
+        search_command_sent = False
+        logger.info("Search mode: starting systematic scan")
 
-    # Phases 0-2: move head to search angles
+    # Sweep through angles
     if search_phase < len(SEARCH_ANGLES):
-        status = get_servo_status()
-        if status and status.get('status') == 'arrived':
-            # Already at target or just starting - check if we've been here long enough
-            elapsed = now - search_phase_start_time
-            if elapsed > 1.0:  # Give at least 1s at each position for detection
-                search_phase += 1
-                search_phase_start_time = now
-                if search_phase < len(SEARCH_ANGLES):
-                    angle = SEARCH_ANGLES[search_phase]
-                    logger.info(f"Search mode: moving head to {angle} degrees (phase {search_phase})")
-                    try:
-                        requests.post(f"{servo_api_url}/move",
-                                      json={"angle": angle}, timeout=0.1)
-                    except requests.exceptions.RequestException:
-                        pass
-                return True
-
-        # Send the move command if we haven't yet for this phase
-        if search_phase_start_time == now:
+        # Send move command once per phase
+        if not search_command_sent:
             angle = SEARCH_ANGLES[search_phase]
-            logger.info(f"Search mode: moving head to {angle} degrees (phase {search_phase})")
+            logger.info(f"Search mode: looking at {angle} degrees (step {search_phase + 1}/{len(SEARCH_ANGLES)})")
             try:
                 requests.post(f"{servo_api_url}/move",
                               json={"angle": angle}, timeout=0.1)
             except requests.exceptions.RequestException:
                 pass
-        return True
+            search_command_sent = True
+            search_phase_start_time = now
+            return
 
-    # Phase 3: wait at forward position
+        # Wait for servo to arrive, then dwell 1s for YOLO to process
+        status = get_servo_status()
+        arrived = status and status.get('status') == 'arrived'
+        elapsed = now - search_phase_start_time
+        if arrived and elapsed > 1.0:
+            # No detection at this angle, advance to next
+            search_phase += 1
+            search_command_sent = False
+        return
+
+    # All angles exhausted — wait at center before repeating
     elapsed = now - search_phase_start_time
     if elapsed < SEARCH_WAIT_DURATION:
         remaining = SEARCH_WAIT_DURATION - elapsed
-        if int(remaining) != int(remaining + 1):  # Log once per second
-            logger.info(f"Search mode: waiting ({remaining:.0f}s remaining)")
-        return True
+        if int(elapsed) != int(elapsed - 1):
+            logger.info(f"Search mode: no target found, waiting ({remaining:.0f}s before next sweep)")
+        return
 
-    # Restart search cycle
-    logger.info("Search mode: restarting scan cycle")
+    # Restart sweep
+    logger.info("Search mode: restarting sweep")
     search_phase = 0
     search_phase_start_time = now
-    angle = SEARCH_ANGLES[0]
-    try:
-        requests.post(f"{servo_api_url}/move",
-                      json={"angle": angle}, timeout=0.1)
-    except requests.exceptions.RequestException:
-        pass
-    return True
+    search_command_sent = False
 
 
 def reset_search():
     """Reset search state when object is found."""
-    global search_phase, search_phase_start_time, last_detection_time
+    global search_phase, search_phase_start_time, search_command_sent, last_detection_time
     if search_phase != -1:
         logger.info("Search mode: object found, resuming tracking")
     search_phase = -1
     search_phase_start_time = None
+    search_command_sent = False
     last_detection_time = time.monotonic()
 
 
