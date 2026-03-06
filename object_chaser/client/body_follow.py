@@ -30,7 +30,7 @@ MAX_TRACK_SPEED = 0.08        # Maximum track speed for rotation
 BODY_ROTATE_DURATION = 0.3    # Duration of each rotation pulse (seconds)
 
 # Forward movement parameters
-FORWARD_HEAD_THRESHOLD = 15.0  # Head must be within this many degrees of center to move forward
+FORWARD_HEAD_THRESHOLD = 30.0  # Head must be within this many degrees of center to move forward
 FORWARD_SPEED = 0.05           # Track speed when moving forward
 FORWARD_DURATION = 0.3         # Duration of each forward pulse (seconds)
 
@@ -319,12 +319,15 @@ async def process_camera_feed(server_url, label='person', output_dir='.'):
                                         if servo_status != 'moving':
                                             update_head(new_goal)
 
-                                    # --- Step 2: Body rotation to re-center head ---
+                                    # --- Step 2 & 3: Body rotation + forward movement ---
                                     head_deviation = abs(current_servo_angle - SERVO_CENTER)
-                                    if head_deviation > BODY_ROTATE_THRESHOLD:
+
+                                    # Rotate body to re-center head when needed
+                                    if head_deviation > BODY_ROTATE_DEADZONE:
                                         rotate_body(current_servo_angle)
-                                    # --- Step 3: Move forward when facing the object ---
-                                    elif head_deviation < FORWARD_HEAD_THRESHOLD:
+
+                                    # Move forward unless severely off-center
+                                    if head_deviation < FORWARD_HEAD_THRESHOLD:
                                         distance = estimate_distance(depth_image, depth_scale, best['bbox'])
                                         if distance is not None:
                                             logger.info(f"Distance to '{label}': {distance:.2f}m")
