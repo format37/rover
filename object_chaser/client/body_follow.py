@@ -27,7 +27,7 @@ BODY_ROTATE_THRESHOLD = 20.0  # Start body rotation when head deviates this many
 BODY_ROTATE_DEADZONE = 8.0    # Stop body rotation when within this many degrees of center
 MIN_TRACK_SPEED = 0.03        # Minimum track speed for rotation
 MAX_TRACK_SPEED = 0.08        # Maximum track speed for rotation
-BODY_ROTATE_DURATION = 0.3    # Duration of each rotation pulse (seconds)
+ROTATE_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (safety)
 
 # Forward movement parameters
 FORWARD_HEAD_THRESHOLD = 30.0  # Head must be within this many degrees of center to move forward
@@ -52,6 +52,7 @@ SEARCH_ANGLES = [90, 45, 0, 135, 180, 135, 90, 45, 0, 45, 90]
 last_servo_update_time = None
 last_detection_time = None
 is_driving = False
+is_rotating = False
 search_phase = -1              # -1 = not searching, 0..N = index in SEARCH_ANGLES, len = waiting
 search_phase_start_time = None
 search_command_sent = False
@@ -96,10 +97,16 @@ def update_head(new_goal):
 
 
 def rotate_body(servo_angle):
-    """Rotate body to bring head back toward center. Returns True if rotating."""
+    """Rotate body continuously to bring head back toward center.
+    Proportional speed based on deviation. Safety timeout refreshed each call."""
+    global is_rotating
     deviation = servo_angle - SERVO_CENTER  # positive = head looking left, negative = right
 
     if abs(deviation) < BODY_ROTATE_DEADZONE:
+        if is_rotating:
+            logger.info("Rotating: head near center, stopping rotation")
+            is_rotating = False
+            stop_body()
         return False
 
     # Proportional speed: larger deviation = faster rotation
@@ -107,24 +114,21 @@ def rotate_body(servo_angle):
     track_speed = MIN_TRACK_SPEED + speed_factor * (MAX_TRACK_SPEED - MIN_TRACK_SPEED)
 
     # Direction: rotate body toward where the head is looking
-    # deviation > 0 means head is looking left -> rotate body left
-    # From move.py: direction=1,1 for both tracks = rotate one way; direction=0,0 = rotate other way
-    # 'a' (direction=1,1) is labeled "tracks go right" in move.py comments
-    # 'd' (direction=0,0) is labeled "tracks go left"
-    # If head looks left (deviation>0), we need body to rotate left -> direction=0 for both
-    # If head looks right (deviation<0), we need body to rotate right -> direction=1 for both
     if deviation > 0:
         rotate_dir = 1  # rotate body left
     else:
         rotate_dir = 0  # rotate body right
 
-    logger.info(f"Body rotate: deviation={deviation:.1f}, speed={track_speed:.3f}, dir={rotate_dir}")
+    if not is_rotating:
+        logger.info(f"Rotating: starting continuous body rotation")
+        is_rotating = True
+    logger.info(f"Rotating: deviation={deviation:.1f}, speed={track_speed:.3f}, dir={rotate_dir}")
 
     try:
         response = requests.post(f"{servo_api_url}/tracks/rotate",
                                  json={"speed": track_speed,
                                         "direction": rotate_dir,
-                                        "duration": BODY_ROTATE_DURATION},
+                                        "duration": ROTATE_SAFETY_TIMEOUT},
                                  timeout=0.5)
         if response.status_code != 200:
             logger.warning(f"Track rotate error: {response.status_code}")
@@ -273,10 +277,11 @@ def reset_search():
 
 def stop_body():
     """Stop all track movement"""
-    global is_driving
-    if is_driving:
-        logger.info("Driving: stopped")
+    global is_driving, is_rotating
+    if is_driving or is_rotating:
+        logger.info("Tracks: stopped")
     is_driving = False
+    is_rotating = False
     try:
         requests.post(f"{servo_api_url}/tracks/stop", timeout=0.5)
     except requests.exceptions.RequestException:
