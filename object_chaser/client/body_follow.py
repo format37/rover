@@ -31,7 +31,7 @@ ROTATE_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (sa
 
 # Forward movement parameters
 FORWARD_HEAD_THRESHOLD = 30.0  # Head must be within this many degrees of center to move forward
-FORWARD_SPEED = 0.05           # Base track speed when moving forward
+FORWARD_SPEED = 0.10           # Base track speed when moving forward
 FORWARD_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (safety)
 STEERING_FACTOR = 0.6          # How much to steer based on object offset (0=none, 1=full)
 
