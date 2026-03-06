@@ -60,8 +60,8 @@ def update_goal(new_goal):
     # logger.info(f"Updated goal to {target_angle} degrees")
     # time.sleep(2) # Debugging delay to avoid too rapid commands
 
-async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
-    print(f"Processing camera feed, sending requests to server (infinite loop, Ctrl+C to stop)")
+async def process_camera_feed(server_url, label='person', output_dir='.', enable_depth=False):
+    print(f"Processing camera feed, tracking label='{label}' (infinite loop, Ctrl+C to stop)")
     url = f"{server_url}/detect/"
     server_times = []
     start_time = time.time()
@@ -79,9 +79,9 @@ async def process_camera_feed(server_url, output_dir='.', enable_depth=False):
                         if response.status == 200:
                             result = await response.json()
                             server_times.append(result['processing_time'])
-                            person_detections = [d for d in result['detections'] if d['label'] == 'person']
-                            if person_detections:
-                                best_person = max(person_detections, key=lambda d: d['confidence'])
+                            label_detections = [d for d in result['detections'] if d['label'] == label]
+                            if label_detections:
+                                best_person = max(label_detections, key=lambda d: d['confidence'])
                                 x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2 # Left + width/2
                                 x_normalized = x_middle / color_image.shape[1] # between 0=left and 1=right
                                 x_normalized = 1-x_normalized # Invert: 0=right, 1=left
@@ -154,6 +154,10 @@ async def servo_set_speed(steps_per_second):
 
 async def main():
     global bar
+    parser = argparse.ArgumentParser(description='Object chaser client - head tracking')
+    parser.add_argument('--label', type=str, default='person', help='YOLO label to track (default: person)')
+    args = parser.parse_args()
+
     server_url = 'http://localhost:8765'
     output_dir = 'camera_output'
     enable_depth = False
@@ -181,11 +185,12 @@ async def main():
     await servo_set_speed(200)  # Set speed to 90 steps/sec
 
     try:
-        logger.info(f"Starting camera feed")
+        logger.info(f"Starting camera feed, tracking '{args.label}'")
         fps, total_time, server_times = await process_camera_feed(
             server_url,
-            output_dir,
-            enable_depth
+            label=args.label,
+            output_dir=output_dir,
+            enable_depth=enable_depth
         )
         logger.info("\nPerformance Metrics:")
         logger.info(f"Total time: {total_time:.2f} seconds")

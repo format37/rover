@@ -34,7 +34,7 @@ def test_api():
             print(f"3.{i+1} Moving to {angle} degrees...")
             response = requests.post(f"{BASE_URL}/move", json={"angle": angle})
             print(json.dumps(response.json(), indent=2))
-            time.sleep(1)  # Wait a bit between commands
+            time.sleep(2)  # Wait a bit between commands
             
             # Check status
             status_response = requests.get(f"{BASE_URL}/status")

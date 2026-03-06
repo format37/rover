@@ -10,6 +10,9 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from adafruit_servokit import ServoKit
+from board import SCL, SDA
+import busio
+from adafruit_pca9685 import PCA9685
 import uvicorn
 
 class ServoController:
@@ -141,6 +144,63 @@ class ServoController:
             "step_delay": self.step_delay
         }
 
+class TrackController:
+    """Controller for tank tracks via PCA9685 boards"""
+
+    def __init__(self, left_address: int = 0x40, right_address: int = 0x41):
+        i2c_bus = busio.I2C(SCL, SDA)
+        self.pca = [
+            PCA9685(i2c_bus, address=left_address),
+            PCA9685(i2c_bus, address=right_address),
+        ]
+        for p in self.pca:
+            p.frequency = 60
+            p.channels[0].duty_cycle = 0
+            p.channels[1].duty_cycle = 0xFFFF
+        self._lock = threading.Lock()
+        self._stop_timer = None
+        print("Track controller initialized")
+
+    def _set_track(self, track: int, speed: float, direction: int):
+        """Set individual track. speed 0-1, direction 0 or 1."""
+        if speed > 0:
+            frequency = speed * 2300
+            dir_val = direction * 0xFFFF
+            self.pca[track].frequency = int(frequency)
+            self.pca[track].channels[1].duty_cycle = int(dir_val)
+            self.pca[track].channels[0].duty_cycle = 0x7FFF  # go
+        else:
+            self.pca[track].channels[0].duty_cycle = 0  # stop
+
+    def move(self, left_speed: float, left_dir: int, right_speed: float, right_dir: int, duration: float = 0):
+        """Move both tracks. If duration > 0, auto-stop after duration seconds."""
+        with self._lock:
+            if self._stop_timer is not None:
+                self._stop_timer.cancel()
+                self._stop_timer = None
+            self._set_track(0, left_speed, left_dir)
+            self._set_track(1, right_speed, right_dir)
+        if duration > 0:
+            self._stop_timer = threading.Timer(duration, self.stop)
+            self._stop_timer.start()
+
+    def rotate(self, speed: float, direction: int, duration: float = 0):
+        """Rotate body in place. direction: 0=right, 1=left."""
+        # Both tracks same direction = pivot turn
+        self.move(speed, direction, speed, direction, duration)
+
+    def stop(self):
+        with self._lock:
+            if self._stop_timer is not None:
+                self._stop_timer.cancel()
+                self._stop_timer = None
+            self._set_track(0, 0, 0)
+            self._set_track(1, 0, 0)
+
+    def get_status(self) -> dict:
+        return {"status": "ok"}
+
+
 # API Models
 class ServoMoveRequest(BaseModel):
     angle: float = Field(..., ge=0, le=180, description="Target angle in degrees (0-180)")
@@ -151,8 +211,21 @@ class ServoMoveNormalizedRequest(BaseModel):
 class ServoSpeedRequest(BaseModel):
     steps_per_second: float = Field(..., ge=1, le=200, description="Movement speed in steps per second")
 
-# Initialize servo controller
+class TrackMoveRequest(BaseModel):
+    left_speed: float = Field(..., ge=0, le=1, description="Left track speed 0-1")
+    left_dir: int = Field(..., ge=0, le=1, description="Left track direction (0 or 1)")
+    right_speed: float = Field(..., ge=0, le=1, description="Right track speed 0-1")
+    right_dir: int = Field(..., ge=0, le=1, description="Right track direction (0 or 1)")
+    duration: float = Field(0, ge=0, le=10, description="Auto-stop after seconds (0=manual stop)")
+
+class TrackRotateRequest(BaseModel):
+    speed: float = Field(..., ge=0, le=1, description="Rotation speed 0-1")
+    direction: int = Field(..., ge=0, le=1, description="Rotation direction: 0=right, 1=left")
+    duration: float = Field(0, ge=0, le=10, description="Auto-stop after seconds (0=manual stop)")
+
+# Initialize controllers
 servo_controller = None
+track_controller = None
 
 # FastAPI app
 app = FastAPI(
@@ -163,8 +236,8 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize servo controller on startup"""
-    global servo_controller
+    """Initialize servo and track controllers on startup"""
+    global servo_controller, track_controller
     try:
         servo_controller = ServoController(channel=0, address=0x42)
         servo_controller.start_movement_thread()
@@ -172,11 +245,20 @@ async def startup_event():
     except Exception as e:
         print(f"Failed to initialize servo controller: {e}")
         raise
+    try:
+        track_controller = TrackController(left_address=0x40, right_address=0x41)
+        print("Track controller initialized successfully")
+    except Exception as e:
+        print(f"Failed to initialize track controller: {e}")
+        print("Track endpoints will be unavailable")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean shutdown"""
-    global servo_controller
+    global servo_controller, track_controller
+    if track_controller:
+        track_controller.stop()
+        print("Track controller stopped")
     if servo_controller:
         servo_controller.stop_movement_thread()
         print("Servo controller stopped")
@@ -265,6 +347,41 @@ async def stop_servo():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stop error: {e}")
+
+@app.post("/tracks/move")
+async def move_tracks(request: TrackMoveRequest):
+    """Move both tracks independently"""
+    if not track_controller:
+        raise HTTPException(status_code=500, detail="Track controller not initialized")
+    try:
+        track_controller.move(request.left_speed, request.left_dir,
+                              request.right_speed, request.right_dir,
+                              request.duration)
+        return {"message": "tracks moving", "duration": request.duration}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Track error: {e}")
+
+@app.post("/tracks/rotate")
+async def rotate_tracks(request: TrackRotateRequest):
+    """Rotate body in place"""
+    if not track_controller:
+        raise HTTPException(status_code=500, detail="Track controller not initialized")
+    try:
+        track_controller.rotate(request.speed, request.direction, request.duration)
+        return {"message": "rotating", "direction": request.direction, "duration": request.duration}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Track error: {e}")
+
+@app.post("/tracks/stop")
+async def stop_tracks():
+    """Stop both tracks"""
+    if not track_controller:
+        raise HTTPException(status_code=500, detail="Track controller not initialized")
+    try:
+        track_controller.stop()
+        return {"message": "tracks stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Track error: {e}")
 
 if __name__ == "__main__":
     print("Starting Servo Control API Server...")

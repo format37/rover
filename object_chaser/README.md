@@ -17,8 +17,14 @@ python3.6 yolo_server.py
 cd ~/projects/rover/object_chaser/server/
 python3.8 servo_api.py
 ```
-## Client
+## Client (head tracking only)
 ```
 cd ~/projects/rover/object_chaser/client/
-python3.8 client.py
+python3.8 client.py --label person
+```
+
+## Client (body follow - head tracking + body rotation)
+```
+cd ~/projects/rover/object_chaser/client/
+python3.8 body_follow.py --label person
 ```
