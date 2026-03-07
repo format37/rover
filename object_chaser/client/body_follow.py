@@ -1,4 +1,3 @@
-import math
 import requests
 import time
 import argparse
@@ -48,7 +47,8 @@ SERVO_UPDATE_INTERVAL = 2.0   # Minimum seconds between servo updates
 
 # Search mode parameters
 SEARCH_TIMEOUT = 2.0           # Start searching after this many seconds without detection
-SWEEP_PERIOD = 6.0             # Full sinusoidal sweep cycle in seconds (smooth left-right-left)
+SEARCH_SERVO_SPEED = 30        # Slow servo speed during search sweep (steps/sec)
+NORMAL_SERVO_SPEED = 120       # Normal servo speed for tracking
 
 last_servo_update_time = None
 last_detection_time = None
@@ -56,7 +56,7 @@ is_driving = False
 is_rotating = False
 rotation_start_time = None
 search_active = False
-search_start_time = None
+search_target = 0
 
 
 def get_servo_status():
@@ -200,34 +200,51 @@ def drive_toward(x_normalized):
 
 
 def search_step():
-    """Smooth sinusoidal head sweep. Naturally decelerates at edges (0° and 180°)."""
-    global search_active, search_start_time
-
-    now = time.monotonic()
+    """Smooth head sweep between 0° and 180°. Servo controller handles interpolation."""
+    global search_active, search_target
 
     if not search_active:
         search_active = True
-        search_start_time = now
+        search_target = 0
         logger.info("Search mode: starting smooth sweep")
+        # Set slow servo speed for smooth continuous motion
+        try:
+            requests.post(f"{servo_api_url}/speed",
+                          json={"steps_per_second": SEARCH_SERVO_SPEED}, timeout=0.1)
+        except requests.exceptions.RequestException:
+            pass
+        try:
+            requests.post(f"{servo_api_url}/move",
+                          json={"angle": search_target}, timeout=0.1)
+        except requests.exceptions.RequestException:
+            pass
+        return
 
-    elapsed = now - search_start_time
-    # Sinusoidal sweep: 90 + 90*sin gives range [0, 180] with smooth deceleration at edges
-    angle = 90.0 + 90.0 * math.sin(2.0 * math.pi * elapsed / SWEEP_PERIOD)
-
-    try:
-        requests.post(f"{servo_api_url}/move",
-                      json={"angle": angle}, timeout=0.1)
-    except requests.exceptions.RequestException:
-        pass
+    # When servo arrives at current target, flip to the other end
+    status = get_servo_status()
+    if status and status.get('status') == 'arrived':
+        search_target = 180 if search_target == 0 else 0
+        logger.info(f"Search mode: sweeping to {search_target}°")
+        try:
+            requests.post(f"{servo_api_url}/move",
+                          json={"angle": search_target}, timeout=0.1)
+        except requests.exceptions.RequestException:
+            pass
 
 
 def reset_search():
     """Reset search state when object is found."""
-    global search_active, search_start_time, last_detection_time
+    global search_active, search_target, last_detection_time
     if search_active:
         logger.info("Search mode: object found, resuming tracking")
+        # Restore normal servo speed
+        try:
+            requests.post(f"{servo_api_url}/speed",
+                          json={"steps_per_second": NORMAL_SERVO_SPEED}, timeout=0.1)
+        except requests.exceptions.RequestException:
+            pass
     search_active = False
-    search_start_time = None
+    search_target = 0
     last_detection_time = time.monotonic()
 
 
@@ -443,7 +460,7 @@ async def main():
     # Set servo speed
     try:
         requests.post(f"{servo_api_url}/speed",
-                       json={"steps_per_second": 200},
+                       json={"steps_per_second": NORMAL_SERVO_SPEED},
                        timeout=0.5)
     except requests.exceptions.RequestException as e:
         logger.warning(f"Error setting servo speed: {e}")

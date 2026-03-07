@@ -38,6 +38,10 @@ LOCAL_LOG_DIR="$LOCAL_DIR/$SESSION/logs"
 mkdir -p "$LOCAL_LOG_DIR"
 sshpass -p 3212321 scp $SSH_OPTS "$JETSON:$REMOTE_LOG_DIR/*.log" "$LOCAL_LOG_DIR/" 2>/dev/null || echo "  (no logs found)"
 
+echo "==> Cleaning up on Jetson..."
+sshpass -p 3212321 ssh $SSH_OPTS "$JETSON" \
+    "rm -f $REMOTE_DIR/sessions/$ARCHIVE && rm -rf $REMOTE_DIR/sessions/$SESSION"
+
 echo "==> Done: $LOCAL_DIR/$SESSION"
 echo "Files: $(find "$LOCAL_DIR/$SESSION" -type f | wc -l)"
 echo "Size:  $(du -sh "$LOCAL_DIR/$SESSION" | cut -f1)"
