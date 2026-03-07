@@ -1,0 +1,38 @@
+# HUD overlay configuration for video composer
+
+hud:
+  # Position: bottom-center
+  position: center      # "center" or "left"
+  margin_y: 40
+
+  # Overall opacity of the HUD background panel
+  panel_alpha: 0.4
+
+  # Color scheme (BGR)
+  color_primary: [200, 220, 200]     # light cyan-green
+  color_accent: [120, 255, 200]      # bright green
+  color_dim: [100, 120, 100]         # dim green for inactive
+  color_bg: [15, 20, 15]             # near-black green tint
+  color_negative: [80, 80, 200]      # red-ish for reverse
+
+  track:
+    width: 42
+    height: 135
+    corner_radius: 12
+    # Speed lines
+    max_lines: 7
+    line_thickness: 1
+
+  servo:
+    radius: 75
+    needle_length: 63
+    arc_thickness: 1
+    needle_thickness: 2
+    tick_length: 12
+
+  # Spacing between elements
+  gap: 30
+
+  # Font
+  font_scale: 0.55
+  font_thickness: 1

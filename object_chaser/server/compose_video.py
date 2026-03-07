@@ -14,6 +14,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from hud import load_hud_config, draw_hud
+
 
 def parse_timestamp(name: str) -> float:
     """Parse filename timestamp into seconds since midnight."""
@@ -182,6 +184,24 @@ def main():
         yolo_entries.sort(key=lambda x: x[0])
     print(f"YOLO entries: {len(yolo_entries)}")
 
+    # Load servo state
+    servo_file = session / "servo" / "state.jsonl"
+    servo_entries = []
+    if servo_file.exists():
+        with open(servo_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                ts = parse_timestamp(entry["timestamp"])
+                servo_entries.append((ts, entry))
+        servo_entries.sort(key=lambda x: x[0])
+    print(f"Servo entries: {len(servo_entries)}")
+
+    # Load HUD config
+    hud_cfg = load_hud_config()
+
     # Output path
     output_path = args.output or str(session) + ".mp4"
 
@@ -223,6 +243,12 @@ def main():
             if detections:
                 frame = draw_depth_overlay(frame, depth_image, detections,
                                            (depth_image.shape[1] / w, depth_image.shape[0] / h))
+
+        # HUD overlay
+        if servo_entries:
+            servo_idx = find_closest(rgb_ts, servo_entries, 1.0)
+            if servo_idx >= 0:
+                frame = draw_hud(frame, servo_entries[servo_idx][1], hud_cfg)
 
         writer.write(frame)
 
