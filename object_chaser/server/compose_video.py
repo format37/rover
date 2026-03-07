@@ -8,7 +8,10 @@ Detected objects get a depth-colormap crop placed above the RGB image with label
 
 import argparse
 import json
+import os
 import sys
+import time
+from multiprocessing import Pool
 from pathlib import Path
 
 import cv2
@@ -130,9 +133,20 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
 
     max_displace = 30
 
-    # Build heatmap LUT: closeness 0 (far) → blue, 1 (near) → red
-    lut_in = np.arange(256, dtype=np.uint8).reshape(1, 256)
-    heatmap_lut = cv2.applyColorMap(lut_in, cv2.COLORMAP_TURBO)[0]  # (256, 3) BGR
+    # Custom heatmap LUT: white (far) → lightning-blue (mid) → green (near)
+    heatmap_lut = np.zeros((256, 3), dtype=np.uint8)
+    # BGR anchors
+    white = np.array([255, 255, 255])
+    blue = np.array([255, 200, 50])    # electric/lightning blue
+    green = np.array([50, 255, 80])
+    for i in range(256):
+        t = i / 255.0
+        if t < 0.5:
+            f = t / 0.5
+            heatmap_lut[i] = (white * (1 - f) + blue * f).astype(np.uint8)
+        else:
+            f = (t - 0.5) / 0.5
+            heatmap_lut[i] = (blue * (1 - f) + green * f).astype(np.uint8)
 
     for det in detections:
         bbox = det["bbox"]
@@ -192,15 +206,18 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
         # Draw triangles
         rx1, ry1, rx2, ry2 = float(x1), float(y1 - max_displace), float(x2), float(y2)
 
+        # Batch triangle rendering: single overlay blend instead of per-triangle mask
+        color_layer = np.zeros_like(frame)
+        alpha_layer = np.zeros(frame.shape[:2], dtype=np.uint8)
+        wireframe = []
+
         for t in triangles:
             ax, ay, bxx, byy, cx, cy = t
-            # Skip triangles outside bbox
             if (ax < rx1 or ax > rx2 or bxx < rx1 or bxx > rx2 or
                 cx < rx1 or cx > rx2 or ay < ry1 or ay > ry2 or
                 byy < ry1 or byy > ry2 or cy < ry1 or cy > ry2):
                 continue
 
-            # Find closeness for each vertex
             verts_c = []
             for vx, vy in [(ax, ay), (bxx, byy), (cx, cy)]:
                 key = (round(vx, 1), round(vy, 1))
@@ -213,15 +230,26 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
 
             pts = np.array([(int(ax), int(ay)), (int(bxx), int(byy)),
                             (int(cx), int(cy))], dtype=np.int32)
-            # Semi-transparent fill + wireframe outline
-            fill_alpha = 0.15 + 0.25 * avg_c  # closer = more opaque fill
-            tri_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-            cv2.fillPoly(tri_mask, [pts], 255)
-            fill_region = tri_mask > 0
-            fill_color = np.array(color, dtype=np.float64)
-            frame[fill_region] = (
-                frame[fill_region] * (1 - fill_alpha) + fill_color * fill_alpha
+            alpha_byte = int((0.15 + 0.25 * avg_c) * 255)
+            cv2.fillConvexPoly(color_layer, pts, color)
+            cv2.fillConvexPoly(alpha_layer, pts, alpha_byte)
+            # Draw thick edges on overlay layers to seal rasterization gaps
+            cv2.polylines(color_layer, [pts], True, color, 2)
+            cv2.polylines(alpha_layer, [pts], True, alpha_byte, 2)
+            wireframe.append((pts, color))
+
+        # Single blend pass for all triangle fills
+        mask = alpha_layer > 0
+        if mask.any():
+            alpha_f = alpha_layer[mask].astype(np.float32) / 255.0
+            alpha_f = alpha_f[:, np.newaxis]
+            frame[mask] = (
+                frame[mask].astype(np.float32) * (1 - alpha_f) +
+                color_layer[mask].astype(np.float32) * alpha_f
             ).astype(np.uint8)
+
+        # Wireframe on top of fills
+        for pts, color in wireframe:
             cv2.polylines(frame, [pts], True, color, 1, cv2.LINE_AA)
 
         # Label
@@ -240,6 +268,35 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
     return frame
 
 
+# -- Multiprocessing worker --
+
+_worker_hud_cfg = None
+
+
+def _init_worker(hud_cfg):
+    global _worker_hud_cfg
+    _worker_hud_cfg = hud_cfg
+
+
+def _process_frame(args):
+    """Process a single frame (runs in worker process)."""
+    rgb_path, depth_path, detections, servo_state = args
+    frame = cv2.imread(rgb_path)
+    if frame is None:
+        return None
+
+    if depth_path is not None and detections:
+        depth_image = np.load(depth_path)
+        h, w = frame.shape[:2]
+        frame = draw_depth_overlay(frame, depth_image, detections,
+                                   (depth_image.shape[1] / w, depth_image.shape[0] / h))
+
+    if servo_state is not None:
+        frame = draw_hud(frame, servo_state, _worker_hud_cfg)
+
+    return frame
+
+
 def main():
     parser = argparse.ArgumentParser(description="Compose video from session data")
     parser.add_argument("session", help="Path to session directory")
@@ -251,6 +308,8 @@ def main():
                         help="Max seconds to reuse a depth frame (default: 2.0)")
     parser.add_argument("--max-yolo-gap", type=float, default=3.0,
                         help="Max seconds to reuse a YOLO detection (default: 3.0)")
+    parser.add_argument("--workers", type=int, default=0,
+                        help="Parallel workers (default: auto)")
     args = parser.parse_args()
 
     session = Path(args.session)
@@ -323,54 +382,53 @@ def main():
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
 
-    # Depth cache to avoid reloading
-    cached_depth_idx = -1
-    cached_depth_image = None
-
-    # Default servo state (shown until first real data arrives)
+    # Pre-compute frame processing arguments
     last_servo_state = {
         "servo_angle": 90, "servo_target": 90,
         "left_speed": 0, "left_dir": 0, "right_speed": 0, "right_dir": 0,
     }
+    has_servo = bool(servo_entries)
 
-    for i, (rgb_ts, rgb_path) in enumerate(rgb_timestamps):
-        frame = cv2.imread(str(rgb_path))
-        if frame is None:
-            continue
-
-        # Find closest depth
+    frame_args = []
+    for rgb_ts, rgb_path in rgb_timestamps:
         depth_idx = find_closest(rgb_ts, depth_timestamps, args.max_depth_gap)
-        depth_image = None
-        if depth_idx >= 0:
-            if depth_idx != cached_depth_idx:
-                cached_depth_image = np.load(str(depth_timestamps[depth_idx][1]))
-                cached_depth_idx = depth_idx
-            depth_image = cached_depth_image
+        depth_path = str(depth_timestamps[depth_idx][1]) if depth_idx >= 0 else None
 
-        # Find closest YOLO
         yolo_idx = find_closest(rgb_ts, yolo_entries, args.max_yolo_gap)
-        if yolo_idx >= 0 and depth_image is not None:
-            detections = yolo_entries[yolo_idx][1].get("detections", [])
-            if detections:
-                frame = draw_depth_overlay(frame, depth_image, detections,
-                                           (depth_image.shape[1] / w, depth_image.shape[0] / h))
+        detections = yolo_entries[yolo_idx][1].get("detections", []) if yolo_idx >= 0 else []
 
-        # HUD overlay (always draw, use last known state)
-        if servo_entries:
+        servo_state = None
+        if has_servo:
             servo_idx = find_closest(rgb_ts, servo_entries, 1.0)
             if servo_idx >= 0:
                 last_servo_state = servo_entries[servo_idx][1]
-            frame = draw_hud(frame, last_servo_state, hud_cfg)
+            servo_state = dict(last_servo_state)
 
-        writer.write(frame)
+        frame_args.append((str(rgb_path), depth_path, detections, servo_state))
 
-        if (i + 1) % 100 == 0 or i == len(rgb_timestamps) - 1:
-            print(f"\r{i + 1}/{len(rgb_timestamps)} frames", end="", flush=True)
+    # Parallel processing
+    n_workers = args.workers if args.workers > 0 else min(os.cpu_count() or 4, 8)
+    n_frames = len(frame_args)
+    print(f"Workers: {n_workers}")
+    t_start = time.time()
+
+    with Pool(n_workers, initializer=_init_worker, initargs=(hud_cfg,)) as pool:
+        for i, frame in enumerate(pool.imap(_process_frame, frame_args, chunksize=4)):
+            if frame is not None:
+                writer.write(frame)
+            done = i + 1
+            elapsed = time.time() - t_start
+            speed = done / elapsed if elapsed > 0 else 0
+            eta = (n_frames - done) / speed if speed > 0 else 0
+            print(f"\r{done}/{n_frames} [{done*100//n_frames}%] "
+                  f"{speed:.1f} fps, ETA {eta:.0f}s", end="", flush=True)
 
     writer.release()
+    total_time = time.time() - t_start
     print(f"\nVideo saved: {output_path}")
-    duration = rgb_timestamps[-1][0] - rgb_timestamps[0][0]
-    print(f"Duration: {duration:.1f}s, {len(rgb_timestamps)} frames, {len(rgb_timestamps)/duration:.1f} actual fps")
+    print(f"Duration: {duration:.1f}s, {len(rgb_timestamps)} frames, "
+          f"{len(rgb_timestamps)/duration:.1f} actual fps")
+    print(f"Composed in {total_time:.1f}s ({n_frames/total_time:.1f} compose fps)")
 
 
 if __name__ == "__main__":
