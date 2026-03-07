@@ -1,4 +1,4 @@
-"""Main loop: fetch frames, run YOLO, call chase logic."""
+"""Main loop: fetch frames, run YOLO, call chase state machine."""
 import time
 import argparse
 import asyncio
@@ -8,6 +8,7 @@ import aiohttp
 import cv2
 import numpy as np
 import chase
+from config import CAMERA_SERVER_URL, YOLO_URL, STALE_FRAME_SECONDS
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -17,10 +18,6 @@ handler.setFormatter(logging.Formatter(
 logger.addHandler(handler)
 logging.getLogger('chase').setLevel(logging.INFO)
 logging.getLogger('chase').addHandler(handler)
-
-YOLO_URL = 'http://localhost:8765'
-CAMERA_URL = 'http://localhost:8080'
-STALE_FRAME_SECONDS = 2.0
 
 _prev_ts = None
 _prev_ts_time = None
@@ -44,7 +41,7 @@ async def run(label='person'):
 
     # Session info
     try:
-        r = requests.get(f"{CAMERA_URL}/session", timeout=2.0)
+        r = requests.get(f"{CAMERA_SERVER_URL}/session", timeout=2.0)
         info = r.json()
         yolo_dir = info['yolo_dir']
         logger.info(f"Session: {info['session_path']}")
@@ -59,7 +56,7 @@ async def run(label='person'):
         try:
             while True:
                 # Fetch frame
-                async with session.get(f"{CAMERA_URL}/frame") as resp:
+                async with session.get(f"{CAMERA_SERVER_URL}/frame") as resp:
                     if resp.status != 200:
                         await asyncio.sleep(0.1)
                         continue
@@ -76,74 +73,43 @@ async def run(label='person'):
                         data={'file': image_data}) as resp:
                     if resp.status != 200:
                         continue
-                    result = await resp.json()
+                    yolo_result = await resp.json()
 
-                detections = [d for d in result['detections']
+                detections = [d for d in yolo_result['detections']
                               if d['label'] == label]
 
-                action = "no_detection"
-                target_bbox = None
-                target_conf = None
-                x_normalized = None
-                distance = None
-                servo_angle = None
-
                 if detections:
-                    chase.reset_search()
                     best = max(detections, key=lambda d: d['confidence'])
-                    target_bbox = best['bbox']
-                    target_conf = best['confidence']
-
-                    # Object position in frame
                     arr = np.frombuffer(image_data, dtype=np.uint8)
                     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     x_mid = best['bbox'][0] + best['bbox'][2] / 2
                     x_normalized = 1 - (x_mid / img.shape[1])
                     logger.info(f"'{label}': conf={best['confidence']:.2f}, "
                                 f"x={x_normalized:.2f}")
-
-                    # Head tracking
-                    servo_angle = chase.track_head(x_normalized)
-
-                    # Distance — error if unavailable
-                    distance = chase.get_distance(best['bbox'])
-                    if distance is None:
-                        logger.error(
-                            f"No depth for detected object bbox={best['bbox']}")
-                        raise RuntimeError(
-                            "Depth returned None for detected object. "
-                            "Check camera_server depth stream.")
-
-                    logger.info(f"Distance: {distance:.2f}m")
-                    action = chase.drive(servo_angle, distance)
-
+                    result = chase.update(detection=best,
+                                          x_normalized=x_normalized)
                 else:
-                    chase.stop_tracks()
-                    elapsed = chase.time_since_detection()
-                    if elapsed > chase.SEARCH_TIMEOUT:
-                        chase.search_step()
-                        action = "searching"
-                    else:
-                        logger.info(f"No '{label}' ({elapsed:.1f}s)")
+                    result = chase.update(detection=None, x_normalized=None)
 
                 # Log
                 jsonl_file.write(json.dumps({
                     "timestamp": frame_ts,
-                    "detections": result['detections'],
+                    "detections": yolo_result['detections'],
                     "target_label": label,
-                    "target_bbox": target_bbox,
-                    "target_confidence": target_conf,
-                    "x_normalized": x_normalized,
-                    "distance": distance,
-                    "servo_angle": servo_angle,
-                    "action": action,
+                    "target_bbox": detections[0]['bbox'] if detections else None,
+                    "target_confidence": detections[0]['confidence'] if detections else None,
+                    "x_normalized": x_normalized if detections else None,
+                    "distance": result.get('distance'),
+                    "servo_angle": result.get('servo_angle'),
+                    "action": result.get('action'),
+                    "state": result.get('state'),
                 }) + "\n")
                 jsonl_file.flush()
 
         except KeyboardInterrupt:
             print("\nStopped.")
         finally:
-            chase.stop_tracks()
+            chase.shutdown()
             jsonl_file.close()
 
 
