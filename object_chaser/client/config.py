@@ -4,8 +4,9 @@
 SERVO_CENTER = 90.0
 SERVO_RANGE = 180
 NORMAL_SERVO_SPEED = 120
-SEARCH_SERVO_SPEED = 20
-CAMERA_FOV = 87
+SEARCH_SERVO_SPEED = 15
+CAMERA_FOV = 87 # RGB: 87° × 58°
+# Depth: 69° × 42°
 
 # Detection
 DETECTION_CONFIDENCE_MIN = 0.4 # Ignore detections below this confidence
@@ -24,8 +25,8 @@ STEERING_GAIN = 1.0            # How aggressively tracks steer from x_normalized
 DECEL_STEP = 0.02              # Speed reduction per frame when losing object
 
 # Body rotation (time-based)
-ROTATION_SPEED = 0.2          # Track speed during pivot
-ROTATION_DEG_PER_SEC = 45.0    # Degrees of body rotation per second at ROTATION_SPEED
+ROTATION_SPEED = 0.1          # Track speed during pivot
+ROTATION_DEG_PER_SEC = 15.0    # Degrees of body rotation per second at ROTATION_SPEED
 
 # Search
 SEARCH_TIMEOUT = 2.0           # Seconds without detection -> start search
