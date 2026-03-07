@@ -15,7 +15,7 @@ DETECTION_CONFIDENCE_MIN = 0.4 # Ignore detections below this confidence
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
-SPEED_MAX = 0.10               # Max track speed
+SPEED_MAX = 0.15               # Max track speed
 SPEED_MIN = 0.03               # Min track speed
 
 # Steering
