@@ -22,6 +22,9 @@ hud:
     # Speed lines
     max_lines: 7
     line_thickness: 1
+    # Normalization range: maps this speed range to 0-100% of the indicator
+    speed_min: 0.02
+    speed_max: 0.15
 
   servo:
     radius: 75

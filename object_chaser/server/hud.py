@@ -66,10 +66,18 @@ def _draw_track(overlay, cx, cy, velocity, cfg, color_cfg):
     speed = abs(velocity)
     forward = velocity >= 0
 
+    # Normalize speed to 0-1 range based on config min/max
+    speed_min = cfg.get("speed_min", 0.0)
+    speed_max = cfg.get("speed_max", 1.0)
+    if speed > 0.005:
+        speed_norm = min(1.0, max(0.0, (speed - speed_min) / (speed_max - speed_min)))
+    else:
+        speed_norm = 0.0
+
     # Speed lines inside the track
     if speed > 0.005:
         color = accent if forward else negative
-        n_lines = max(1, int(speed * cfg["max_lines"]))
+        n_lines = max(1, round(speed_norm * cfg["max_lines"]))
         line_t = cfg["line_thickness"]
 
         # Lines region (inside the rounded rect with some padding)

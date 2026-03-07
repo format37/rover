@@ -222,6 +222,12 @@ def main():
     cached_depth_idx = -1
     cached_depth_image = None
 
+    # Default servo state (shown until first real data arrives)
+    last_servo_state = {
+        "servo_angle": 90, "servo_target": 90,
+        "left_speed": 0, "left_dir": 0, "right_speed": 0, "right_dir": 0,
+    }
+
     for i, (rgb_ts, rgb_path) in enumerate(rgb_timestamps):
         frame = cv2.imread(str(rgb_path))
         if frame is None:
@@ -244,11 +250,12 @@ def main():
                 frame = draw_depth_overlay(frame, depth_image, detections,
                                            (depth_image.shape[1] / w, depth_image.shape[0] / h))
 
-        # HUD overlay
+        # HUD overlay (always draw, use last known state)
         if servo_entries:
             servo_idx = find_closest(rgb_ts, servo_entries, 1.0)
             if servo_idx >= 0:
-                frame = draw_hud(frame, servo_entries[servo_idx][1], hud_cfg)
+                last_servo_state = servo_entries[servo_idx][1]
+            frame = draw_hud(frame, last_servo_state, hud_cfg)
 
         writer.write(frame)
 
