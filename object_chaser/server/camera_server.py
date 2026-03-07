@@ -205,28 +205,62 @@ class CameraManager:
     def get_distance(self, bbox: List[float], shrink: float = 0.2) -> Optional[float]:
         with self._lock:
             depth_image = self.latest_depth_image
+            color_image = self.latest_color_image
             scale = self.depth_scale
 
         if depth_image is None:
+            print("get_distance: no depth image")
             return None
 
-        x, y, w, h = [int(v) for v in bbox]
-        img_h, img_w = depth_image.shape[:2]
+        depth_h, depth_w = depth_image.shape[:2]
+
+        # Scale bbox from color space to depth space
+        x, y, w, h = bbox
+        if color_image is not None:
+            color_h, color_w = color_image.shape[:2]
+            if color_w != depth_w or color_h != depth_h:
+                sx = depth_w / color_w
+                sy = depth_h / color_h
+                x, y, w, h = x * sx, y * sy, w * sx, h * sy
+
+        x, y, w, h = int(x), int(y), int(w), int(h)
 
         margin_x = int(w * shrink)
         margin_y = int(h * shrink)
         x1 = max(0, x + margin_x)
         y1 = max(0, y + margin_y)
-        x2 = min(img_w, x + w - margin_x)
-        y2 = min(img_h, y + h - margin_y)
+        x2 = min(depth_w, x + w - margin_x)
+        y2 = min(depth_h, y + h - margin_y)
 
+        # Fallback to unshrunk bbox if shrunk region is empty
         if x2 <= x1 or y2 <= y1:
+            print(f"get_distance: shrunk bbox empty, using full bbox")
+            x1 = max(0, x)
+            y1 = max(0, y)
+            x2 = min(depth_w, x + w)
+            y2 = min(depth_h, y + h)
+
+        # Fallback to center point if bbox still empty
+        if x2 <= x1 or y2 <= y1:
+            cx = max(0, min(depth_w - 1, x + w // 2))
+            cy = max(0, min(depth_h - 1, y + h // 2))
+            print(f"get_distance: bbox out of bounds, using center ({cx},{cy})")
+            val = int(depth_image[cy, cx])
+            if val > 0:
+                return float(val) * scale
             return None
 
         region = depth_image[y1:y2, x1:x2]
         valid = region[region > 0]
         if len(valid) == 0:
-            return None
+            # Expand to full bbox
+            region_full = depth_image[max(0, y):min(depth_h, y+h),
+                                      max(0, x):min(depth_w, x+w)]
+            valid = region_full[region_full > 0]
+            if len(valid) == 0:
+                print(f"get_distance: all zeros in region [{x1}:{x2},{y1}:{y2}]")
+                return None
+            print(f"get_distance: shrunk region all zeros, used full bbox")
 
         return float(np.median(valid)) * scale
 
