@@ -1,3 +1,4 @@
+import math
 import requests
 import time
 import argparse
@@ -46,19 +47,16 @@ HEAD_OFFSET_THRESHOLD = 10    # Minimum camera offset (degrees) to trigger head 
 SERVO_UPDATE_INTERVAL = 2.0   # Minimum seconds between servo updates
 
 # Search mode parameters
-SEARCH_TIMEOUT = 10.0          # Start searching after this many seconds without detection
-SEARCH_WAIT_DURATION = 10.0    # Pause at center after full sweep before repeating
-# Sweep: center → left in 45° steps → right in 45° steps → back to center
-SEARCH_ANGLES = [90, 45, 0, 135, 180, 135, 90, 45, 0, 45, 90]
+SEARCH_TIMEOUT = 2.0           # Start searching after this many seconds without detection
+SWEEP_PERIOD = 6.0             # Full sinusoidal sweep cycle in seconds (smooth left-right-left)
 
 last_servo_update_time = None
 last_detection_time = None
 is_driving = False
 is_rotating = False
 rotation_start_time = None
-search_phase = -1              # -1 = not searching, 0..N = index in SEARCH_ANGLES, len = waiting
-search_phase_start_time = None
-search_command_sent = False
+search_active = False
+search_start_time = None
 
 
 def get_servo_status():
@@ -202,66 +200,34 @@ def drive_toward(x_normalized):
 
 
 def search_step():
-    """Advance the search state machine. At each angle: move, wait for arrival, dwell for YOLO."""
-    global search_phase, search_phase_start_time, search_command_sent
+    """Smooth sinusoidal head sweep. Naturally decelerates at edges (0° and 180°)."""
+    global search_active, search_start_time
 
     now = time.monotonic()
 
-    # First entry into search mode
-    if search_phase == -1:
-        search_phase = 0
-        search_phase_start_time = now
-        search_command_sent = False
-        logger.info("Search mode: starting systematic scan")
+    if not search_active:
+        search_active = True
+        search_start_time = now
+        logger.info("Search mode: starting smooth sweep")
 
-    # Sweep through angles
-    if search_phase < len(SEARCH_ANGLES):
-        # Send move command once per phase
-        if not search_command_sent:
-            angle = SEARCH_ANGLES[search_phase]
-            logger.info(f"Search mode: looking at {angle} degrees (step {search_phase + 1}/{len(SEARCH_ANGLES)})")
-            try:
-                requests.post(f"{servo_api_url}/move",
-                              json={"angle": angle}, timeout=0.1)
-            except requests.exceptions.RequestException:
-                pass
-            search_command_sent = True
-            search_phase_start_time = now
-            return
+    elapsed = now - search_start_time
+    # Sinusoidal sweep: 90 + 90*sin gives range [0, 180] with smooth deceleration at edges
+    angle = 90.0 + 90.0 * math.sin(2.0 * math.pi * elapsed / SWEEP_PERIOD)
 
-        # Wait for servo to arrive, then dwell 1s for YOLO to process
-        status = get_servo_status()
-        arrived = status and status.get('status') == 'arrived'
-        elapsed = now - search_phase_start_time
-        if arrived and elapsed > 1.0:
-            # No detection at this angle, advance to next
-            search_phase += 1
-            search_command_sent = False
-        return
-
-    # All angles exhausted — wait at center before repeating
-    elapsed = now - search_phase_start_time
-    if elapsed < SEARCH_WAIT_DURATION:
-        remaining = SEARCH_WAIT_DURATION - elapsed
-        if int(elapsed) != int(elapsed - 1):
-            logger.info(f"Search mode: no target found, waiting ({remaining:.0f}s before next sweep)")
-        return
-
-    # Restart sweep
-    logger.info("Search mode: restarting sweep")
-    search_phase = 0
-    search_phase_start_time = now
-    search_command_sent = False
+    try:
+        requests.post(f"{servo_api_url}/move",
+                      json={"angle": angle}, timeout=0.1)
+    except requests.exceptions.RequestException:
+        pass
 
 
 def reset_search():
     """Reset search state when object is found."""
-    global search_phase, search_phase_start_time, search_command_sent, last_detection_time
-    if search_phase != -1:
+    global search_active, search_start_time, last_detection_time
+    if search_active:
         logger.info("Search mode: object found, resuming tracking")
-    search_phase = -1
-    search_phase_start_time = None
-    search_command_sent = False
+    search_active = False
+    search_start_time = None
     last_detection_time = time.monotonic()
 
 

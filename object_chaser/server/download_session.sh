@@ -32,6 +32,12 @@ echo "==> Extracting..."
 tar -xzf "$LOCAL_DIR/$ARCHIVE" -C "$LOCAL_DIR"
 rm "$LOCAL_DIR/$ARCHIVE"
 
+echo "==> Downloading logs..."
+REMOTE_LOG_DIR="/home/jetson/projects/rover/object_chaser/logs"
+LOCAL_LOG_DIR="$LOCAL_DIR/$SESSION/logs"
+mkdir -p "$LOCAL_LOG_DIR"
+sshpass -p 3212321 scp $SSH_OPTS "$JETSON:$REMOTE_LOG_DIR/*.log" "$LOCAL_LOG_DIR/" 2>/dev/null || echo "  (no logs found)"
+
 echo "==> Done: $LOCAL_DIR/$SESSION"
 echo "Files: $(find "$LOCAL_DIR/$SESSION" -type f | wc -l)"
 echo "Size:  $(du -sh "$LOCAL_DIR/$SESSION" | cut -f1)"
