@@ -149,6 +149,7 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
     darken = mesh_cfg.get("darken", 0.5) if mesh_cfg else 0.5
     gamma = mesh_cfg.get("gamma", 1.0) if mesh_cfg else 1.0
     cutoff = mesh_cfg.get("cutoff", 0.0) if mesh_cfg else 0.0
+    max_tri_area = mesh_cfg.get("max_triangle_area", 0) if mesh_cfg else 0
     pct_near = mesh_cfg.get("depth_pct_near", 5) if mesh_cfg else 5
     pct_far = mesh_cfg.get("depth_pct_far", 95) if mesh_cfg else 95
 
@@ -238,6 +239,12 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                 cx < rx1 or cx > rx2 or ay < ry1 or ay > ry2 or
                 byy < ry1 or byy > ry2 or cy < ry1 or cy > ry2):
                 continue
+
+            # Triangle area (cross product / 2)
+            if max_tri_area > 0:
+                area = abs((bxx - ax) * (cy - ay) - (cx - ax) * (byy - ay)) * 0.5
+                if area > max_tri_area:
+                    continue
 
             verts_c = []
             verts_raw = []
