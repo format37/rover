@@ -129,8 +129,10 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
     sy = dep_h / img_h
 
     max_displace = 30
-    color_bright = np.array([220, 200, 50], dtype=np.float64)
-    color_dim = np.array([100, 80, 20], dtype=np.float64)
+
+    # Build heatmap LUT: closeness 0 (far) → blue, 1 (near) → red
+    lut_in = np.arange(256, dtype=np.uint8).reshape(1, 256)
+    heatmap_lut = cv2.applyColorMap(lut_in, cv2.COLORMAP_TURBO)[0]  # (256, 3) BGR
 
     for det in detections:
         bbox = det["bbox"]
@@ -206,11 +208,20 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                 verts_c.append(closeness[idx] if idx is not None else 0)
 
             avg_c = sum(verts_c) / 3
-            color = color_dim + (color_bright - color_dim) * avg_c
-            color = tuple(int(v) for v in color)
+            lut_idx = min(255, max(0, int(avg_c * 255)))
+            color = tuple(int(v) for v in heatmap_lut[lut_idx])
 
             pts = np.array([(int(ax), int(ay)), (int(bxx), int(byy)),
                             (int(cx), int(cy))], dtype=np.int32)
+            # Semi-transparent fill + wireframe outline
+            fill_alpha = 0.15 + 0.25 * avg_c  # closer = more opaque fill
+            tri_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+            cv2.fillPoly(tri_mask, [pts], 255)
+            fill_region = tri_mask > 0
+            fill_color = np.array(color, dtype=np.float64)
+            frame[fill_region] = (
+                frame[fill_region] * (1 - fill_alpha) + fill_color * fill_alpha
+            ).astype(np.uint8)
             cv2.polylines(frame, [pts], True, color, 1, cv2.LINE_AA)
 
         # Label
@@ -224,7 +235,7 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
         cv2.rectangle(frame, (tx - 2, ty - th - 2), (tx + tw + 2, ty + 2),
                       (10, 15, 10), -1)
         cv2.putText(frame, text, (tx, ty), font, font_scale,
-                    tuple(int(v) for v in color_bright), thickness, cv2.LINE_AA)
+                    (120, 255, 200), thickness, cv2.LINE_AA)
 
     return frame
 
