@@ -52,6 +52,19 @@ def find_closest(target_ts: float, candidates: list, max_gap: float) -> int:
     return best
 
 
+def _enrich_detections(yolo_entry: dict) -> list:
+    """Copy entry-level distance onto the matching target detection."""
+    detections = yolo_entry.get("detections", [])
+    distance = yolo_entry.get("distance")
+    target_bbox = yolo_entry.get("target_bbox")
+    if distance is not None and target_bbox is not None:
+        for det in detections:
+            if det.get("bbox") == target_bbox:
+                det["distance"] = distance
+                break
+    return detections
+
+
 def _sample_depth(px, py, depth_image, sx, sy):
     """Sample depth value at image pixel (px, py)."""
     dep_h, dep_w = depth_image.shape[:2]
@@ -284,18 +297,31 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
         for pts, color in wireframe:
             cv2.polylines(frame, [pts], True, color, 1, cv2.LINE_AA)
 
-        # Label
+        # Label + distance
         text = f"{label} {conf:.0%}"
+        distance = det.get("distance")
+        if distance is not None:
+            text2 = f"{distance:.2f}m"
+        else:
+            text2 = None
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = max(0.4, min(bw / 200, 1.0))
         thickness = max(1, int(font_scale * 2))
         (tw, th), _ = cv2.getTextSize(text, font, font_scale, thickness)
         tx = x1 + 4
         ty = y1 - 8 if y1 > th + 12 else y1 + th + 4
-        cv2.rectangle(frame, (tx - 2, ty - th - 2), (tx + tw + 2, ty + 2),
+        box_h = th + 2
+        if text2:
+            (tw2, th2), _ = cv2.getTextSize(text2, font, font_scale, thickness)
+            tw = max(tw, tw2)
+            box_h += th2 + 4
+        cv2.rectangle(frame, (tx - 2, ty - th - 2), (tx + tw + 2, ty - th + box_h),
                       (10, 15, 10), -1)
         cv2.putText(frame, text, (tx, ty), font, font_scale,
                     (120, 255, 200), thickness, cv2.LINE_AA)
+        if text2:
+            cv2.putText(frame, text2, (tx, ty + th2 + 4), font, font_scale,
+                        (120, 255, 200), thickness, cv2.LINE_AA)
 
     return frame
 
@@ -442,8 +468,9 @@ def main():
         depth_path = str(session / "depth" / Path(args.frame).name)
 
         yolo_idx = find_closest(depth_ts, yolo_entries, args.max_yolo_gap)
-        detections = yolo_entries[yolo_idx][1].get("detections", []) if yolo_idx >= 0 else []
-        yolo_ts = yolo_entries[yolo_idx][1].get("timestamp", "") if yolo_idx >= 0 else ""
+        yolo_entry = yolo_entries[yolo_idx][1] if yolo_idx >= 0 else {}
+        detections = _enrich_detections(yolo_entry)
+        yolo_ts = yolo_entry.get("timestamp", "")
         if args.label:
             detections = [d for d in detections if d.get("label") == args.label]
 
@@ -568,8 +595,9 @@ def main():
         depth_path = str(depth_timestamps[depth_idx][1]) if depth_idx >= 0 else None
 
         yolo_idx = find_closest(rgb_ts, yolo_entries, args.max_yolo_gap)
-        detections = yolo_entries[yolo_idx][1].get("detections", []) if yolo_idx >= 0 else []
-        yolo_ts = yolo_entries[yolo_idx][1].get("timestamp", "") if yolo_idx >= 0 else ""
+        yolo_entry = yolo_entries[yolo_idx][1] if yolo_idx >= 0 else {}
+        detections = _enrich_detections(yolo_entry)
+        yolo_ts = yolo_entry.get("timestamp", "")
         if args.label:
             detections = [d for d in detections if d.get("label") == args.label]
 
