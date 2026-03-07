@@ -123,7 +123,12 @@ class CameraManager:
             except RuntimeError:
                 continue
 
-            aligned = self.align.process(frames)
+            try:
+                aligned = self.align.process(frames)
+            except RuntimeError as e:
+                print(f"Align error (skipping frame): {e}")
+                continue
+
             depth_frame = aligned.get_depth_frame()
             color_frame = aligned.get_color_frame()
             if not depth_frame or not color_frame:
@@ -131,8 +136,12 @@ class CameraManager:
 
             # Apply depth filters
             filtered_depth = depth_frame
-            for f in self.filters.values():
-                filtered_depth = f.process(filtered_depth)
+            try:
+                for f in self.filters.values():
+                    filtered_depth = f.process(filtered_depth)
+            except RuntimeError as e:
+                print(f"Depth filter error (skipping frame): {e}")
+                continue
 
             color_image = np.asanyarray(color_frame.get_data())
             depth_image = np.asanyarray(filtered_depth.get_data())

@@ -229,7 +229,10 @@ def _do_tracking(detection, x_normalized):
     # Distance
     distance = _get_distance(detection['bbox'])
     if distance is None:
-        raise RuntimeError("Depth returned None for detected object.")
+        logger.warning("Depth returned None, stopping tracks")
+        _stop_tracks()
+        _current_speed = 0.0
+        return _result("no_depth", servo_angle=servo_angle)
 
     if distance <= STOP_DISTANCE:
         logger.info(f"Too close ({distance:.2f}m), stopping")
