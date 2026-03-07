@@ -2,10 +2,10 @@ import requests
 import time
 import argparse
 import asyncio
-from camera_controls import CameraController
-import cv2
+import json
 import logging
 import aiohttp
+import cv2
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 servo_api_url = 'http://localhost:8000'
+camera_server_url = 'http://localhost:8080'
 
 # Servo center angle - when head faces forward
 SERVO_CENTER = 90.0
@@ -140,37 +141,6 @@ def rotate_body(servo_angle):
     return True
 
 
-def estimate_distance(depth_image, depth_scale, bbox):
-    """Estimate distance to object using depth data within its bounding box.
-    Returns distance in meters, or None if depth data is unavailable."""
-    if depth_image is None:
-        return None
-
-    x, y, w, h = bbox
-    img_h, img_w = depth_image.shape[:2]
-
-    # Shrink bbox inward to avoid noisy edges
-    margin_x = int(w * DEPTH_BBOX_SHRINK)
-    margin_y = int(h * DEPTH_BBOX_SHRINK)
-    x1 = max(0, x + margin_x)
-    y1 = max(0, y + margin_y)
-    x2 = min(img_w, x + w - margin_x)
-    y2 = min(img_h, y + h - margin_y)
-
-    if x2 <= x1 or y2 <= y1:
-        return None
-
-    region = depth_image[y1:y2, x1:x2]
-    # Filter out zero (invalid) depth values
-    valid = region[region > 0]
-    if len(valid) == 0:
-        return None
-
-    # Median is robust against outliers
-    distance = float(np.median(valid)) * depth_scale
-    return distance
-
-
 def drive_toward(x_normalized):
     """Drive forward with differential steering based on object position.
     x_normalized: 0=right, 1=left (inverted camera coords).
@@ -288,9 +258,9 @@ def stop_body():
         pass
 
 
-async def process_camera_feed(server_url, label='person', output_dir='.'):
+async def process_camera_feed(server_url, label='person'):
     print(f"Body follow mode: tracking label='{label}', depth enabled (Ctrl+C to stop)")
-    url = f"{server_url}/detect/"
+    yolo_url = f"{server_url}/detect/"
     server_times = []
     start_time = time.time()
     request_count = 0
@@ -298,105 +268,163 @@ async def process_camera_feed(server_url, label='person', output_dir='.'):
     global last_detection_time
     last_detection_time = time.monotonic()
 
-    async with CameraController(output_dir=output_dir, enable_depth=True) as camera:
-        depth_scale = camera.depth_scale
-        logger.info(f"Depth scale: {depth_scale}")
-        async with aiohttp.ClientSession() as session:
-            try:
-                while True:
-                    depth_image, color_image = await camera.get_frames()
-                    _, img_encoded = cv2.imencode('.jpg', color_image)
-                    image_data = img_encoded.tobytes()
+    # Get session info from camera server for JSONL logging
+    try:
+        session_resp = requests.get(f"{camera_server_url}/session", timeout=2.0)
+        session_info = session_resp.json()
+        yolo_dir = session_info['yolo_dir']
+        logger.info(f"Camera session: {session_info['session_path']}")
+    except Exception as e:
+        logger.error(f"Cannot connect to camera server: {e}")
+        logger.error("Make sure camera_server.py is running on localhost:8080")
+        return 0, 0, []
 
-                    async with session.post(url, data={'file': image_data}) as response:
-                        if response.status == 200:
-                            result = await response.json()
-                            server_times.append(result['processing_time'])
+    jsonl_path = f"{yolo_dir}/detections.jsonl"
+    jsonl_file = open(jsonl_path, 'a')
+    logger.info(f"Logging detections to {jsonl_path}")
 
-                            # Filter detections by label
-                            label_detections = [d for d in result['detections'] if d['label'] == label]
+    async with aiohttp.ClientSession() as session:
+        try:
+            while True:
+                # Fetch latest frame from camera server
+                async with session.get(f"{camera_server_url}/frame") as frame_resp:
+                    if frame_resp.status != 200:
+                        logger.warning(f"Camera server error: {frame_resp.status}")
+                        await asyncio.sleep(0.1)
+                        continue
+                    image_data = await frame_resp.read()
+                    frame_timestamp = frame_resp.headers.get('X-Timestamp', '')
 
-                            if label_detections:
-                                reset_search()
-                                best = max(label_detections, key=lambda d: d['confidence'])
-                                x_middle = best['bbox'][0] + best['bbox'][2] / 2
-                                x_normalized = x_middle / color_image.shape[1]
-                                x_normalized = 1 - x_normalized  # Invert: 0=right, 1=left
-                                logger.info(f"Best '{label}': conf={best['confidence']:.2f}, x_norm={x_normalized:.2f}")
+                # Send JPEG to YOLO
+                async with session.post(yolo_url, data={'file': image_data}) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        server_times.append(result['processing_time'])
 
-                                # --- Step 1: Head tracking ---
-                                status = get_servo_status()
-                                if status:
-                                    current_servo_angle = status.get('current_position', SERVO_CENTER)
-                                    servo_status = status.get('status')
-                                    logger.info(f"Servo: angle={current_servo_angle}, status={servo_status}")
+                        # Filter detections by label
+                        label_detections = [d for d in result['detections'] if d['label'] == label]
 
-                                    fov = 87  # Realsense D435 horizontal FOV
-                                    camera_offset = (x_normalized - 0.5) * fov
+                        action = "no_detection"
+                        target_bbox = None
+                        target_conf = None
+                        x_normalized = None
+                        distance = None
+                        servo_angle = None
 
-                                    if abs(camera_offset) > HEAD_OFFSET_THRESHOLD:
-                                        new_goal_angle = current_servo_angle + camera_offset
-                                        new_goal_angle = max(0, min(SERVO_RANGE, new_goal_angle))
-                                        new_goal = new_goal_angle / SERVO_RANGE
+                        if label_detections:
+                            reset_search()
+                            best = max(label_detections, key=lambda d: d['confidence'])
+                            target_bbox = best['bbox']
+                            target_conf = best['confidence']
 
-                                        if servo_status != 'moving':
-                                            update_head(new_goal)
+                            # Decode JPEG to get image dimensions
+                            img_array = np.frombuffer(image_data, dtype=np.uint8)
+                            color_image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                            img_width = color_image.shape[1]
 
-                                    # --- Step 2 & 3: Body rotation + forward movement ---
-                                    head_deviation = abs(current_servo_angle - SERVO_CENTER)
+                            x_middle = best['bbox'][0] + best['bbox'][2] / 2
+                            x_normalized = x_middle / img_width
+                            x_normalized = 1 - x_normalized  # Invert: 0=right, 1=left
+                            logger.info(f"Best '{label}': conf={best['confidence']:.2f}, x_norm={x_normalized:.2f}")
 
-                                    # Rotate body to re-center head when needed
-                                    if head_deviation > BODY_ROTATE_DEADZONE:
-                                        rotate_body(current_servo_angle)
+                            # --- Step 1: Head tracking ---
+                            status = get_servo_status()
+                            if status:
+                                current_servo_angle = status.get('current_position', SERVO_CENTER)
+                                servo_status = status.get('status')
+                                servo_angle = current_servo_angle
+                                logger.info(f"Servo: angle={current_servo_angle}, status={servo_status}")
 
-                                    # Move forward unless severely off-center
-                                    if head_deviation < FORWARD_HEAD_THRESHOLD:
-                                        distance = estimate_distance(depth_image, depth_scale, best['bbox'])
-                                        if distance is not None:
-                                            logger.info(f"Distance to '{label}': {distance:.2f}m")
-                                            if distance > STOP_DISTANCE:
-                                                drive_toward(x_normalized)
-                                            else:
-                                                logger.info(f"Too close ({distance:.2f}m < {STOP_DISTANCE}m), stopping")
-                                                stop_body()
+                                fov = 87  # Realsense D435 horizontal FOV
+                                camera_offset = (x_normalized - 0.5) * fov
+
+                                if abs(camera_offset) > HEAD_OFFSET_THRESHOLD:
+                                    new_goal_angle = current_servo_angle + camera_offset
+                                    new_goal_angle = max(0, min(SERVO_RANGE, new_goal_angle))
+                                    new_goal = new_goal_angle / SERVO_RANGE
+
+                                    if servo_status != 'moving':
+                                        update_head(new_goal)
+
+                                # --- Step 2 & 3: Body rotation + forward movement ---
+                                head_deviation = abs(current_servo_angle - SERVO_CENTER)
+
+                                # Rotate body to re-center head when needed
+                                if head_deviation > BODY_ROTATE_DEADZONE:
+                                    rotate_body(current_servo_angle)
+                                    action = "rotating"
+
+                                # Move forward unless severely off-center
+                                if head_deviation < FORWARD_HEAD_THRESHOLD:
+                                    # Get distance from camera server
+                                    try:
+                                        dist_resp = requests.post(
+                                            f"{camera_server_url}/distance",
+                                            json={"bbox": best['bbox'], "shrink": DEPTH_BBOX_SHRINK},
+                                            timeout=0.5)
+                                        if dist_resp.status_code == 200:
+                                            distance = dist_resp.json().get('distance')
+                                    except requests.exceptions.RequestException as e:
+                                        logger.warning(f"Distance query failed: {e}")
+
+                                    if distance is not None:
+                                        logger.info(f"Distance to '{label}': {distance:.2f}m")
+                                        if distance > STOP_DISTANCE:
+                                            drive_toward(x_normalized)
+                                            action = "driving"
                                         else:
-                                            logger.warning("No valid depth data, skipping forward movement")
-                                    else:
-                                        # Head too far off center — stop driving, rotate only
-                                        if is_driving:
+                                            logger.info(f"Too close ({distance:.2f}m < {STOP_DISTANCE}m), stopping")
                                             stop_body()
-
-                            else:
-                                # No detection — stop driving immediately
-                                if is_driving:
-                                    stop_body()
-                                # Check if we should enter search mode
-                                now = time.monotonic()
-                                if last_detection_time is None:
-                                    last_detection_time = now
-                                no_detect_duration = now - last_detection_time
-                                if no_detect_duration > SEARCH_TIMEOUT:
-                                    search_step()
+                                            action = "too_close"
+                                    else:
+                                        logger.warning("No valid depth data, skipping forward movement")
+                                        action = "tracking"
                                 else:
-                                    logger.info(f"No '{label}' detected ({no_detect_duration:.1f}s)")
+                                    # Head too far off center — stop driving, rotate only
+                                    if is_driving:
+                                        stop_body()
+                                    action = "rotating"
 
-                            # Draw annotations
-                            annotated_image = color_image.copy()
-                            for detection in result['detections']:
-                                x, y, w, h = detection['bbox']
-                                color = (0, 255, 0) if detection['label'] == label else (128, 128, 128)
-                                cv2.rectangle(annotated_image, (x, y), (x + w, y + h), color, 2)
-                                det_label = f"{detection['label']} {detection['confidence']:.2f}"
-                                cv2.putText(annotated_image, det_label, (x, y - 10),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
                         else:
-                            print(f"Error: {response.status}, {await response.text()}")
+                            # No detection — stop driving immediately
+                            if is_driving:
+                                stop_body()
+                            # Check if we should enter search mode
+                            now = time.monotonic()
+                            if last_detection_time is None:
+                                last_detection_time = now
+                            no_detect_duration = now - last_detection_time
+                            if no_detect_duration > SEARCH_TIMEOUT:
+                                search_step()
+                                action = "searching"
+                            else:
+                                logger.info(f"No '{label}' detected ({no_detect_duration:.1f}s)")
 
-                    request_count += 1
+                        # Log detection to JSONL
+                        log_entry = {
+                            "timestamp": frame_timestamp,
+                            "detections": result['detections'],
+                            "target_label": label,
+                            "target_bbox": target_bbox,
+                            "target_confidence": target_conf,
+                            "x_normalized": x_normalized,
+                            "distance": distance,
+                            "servo_angle": servo_angle,
+                            "action": action,
+                        }
+                        jsonl_file.write(json.dumps(log_entry) + "\n")
+                        jsonl_file.flush()
 
-            except KeyboardInterrupt:
-                print("\nInterrupted by user.")
-                stop_body()
+                    else:
+                        print(f"Error: {response.status}, {await response.text()}")
+
+                request_count += 1
+
+        except KeyboardInterrupt:
+            print("\nInterrupted by user.")
+            stop_body()
+        finally:
+            jsonl_file.close()
 
     total_time = time.time() - start_time
     fps = request_count / total_time if total_time > 0 else 0
@@ -409,7 +437,6 @@ async def main():
     args = parser.parse_args()
 
     server_url = 'http://localhost:8765'
-    output_dir = 'camera_output'
 
     logger.info("Initializing servo via API")
     try:
@@ -438,7 +465,6 @@ async def main():
         fps, total_time, server_times = await process_camera_feed(
             server_url,
             label=args.label,
-            output_dir=output_dir
         )
         logger.info(f"Total time: {total_time:.2f}s, Average FPS: {fps:.2f}")
     except Exception as e:
