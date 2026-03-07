@@ -124,7 +124,8 @@ def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy):
 
 
 def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
-                       detections: list, depth_scale: tuple) -> np.ndarray:
+                       detections: list, depth_scale: tuple,
+                       mesh_cfg: dict = None) -> np.ndarray:
     """Draw Tron-style adaptive triangle mesh on detected objects."""
     img_h, img_w = frame.shape[:2]
     dep_h, dep_w = depth_image.shape[:2]
@@ -132,6 +133,9 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
     sy = dep_h / img_h
 
     max_displace = 30
+    alpha_min = mesh_cfg.get("fill_alpha_min", 0.15) if mesh_cfg else 0.15
+    alpha_max = mesh_cfg.get("fill_alpha_max", 0.40) if mesh_cfg else 0.40
+    darken = mesh_cfg.get("darken", 0.5) if mesh_cfg else 0.5
 
     # Custom heatmap LUT: white (far) → lightning-blue (mid) → green (near)
     heatmap_lut = np.zeros((256, 3), dtype=np.uint8)
@@ -201,7 +205,7 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
         # Darken bbox region
         cy1 = max(0, y1 - max_displace)
         roi = frame[cy1:y2, x1:x2].copy()
-        frame[cy1:y2, x1:x2] = (roi * 0.5).astype(np.uint8)
+        frame[cy1:y2, x1:x2] = (roi * darken).astype(np.uint8)
 
         # Draw triangles
         rx1, ry1, rx2, ry2 = float(x1), float(y1 - max_displace), float(x2), float(y2)
@@ -230,7 +234,7 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
 
             pts = np.array([(int(ax), int(ay)), (int(bxx), int(byy)),
                             (int(cx), int(cy))], dtype=np.int32)
-            alpha_byte = int((0.15 + 0.25 * avg_c) * 255)
+            alpha_byte = int((alpha_min + (alpha_max - alpha_min) * avg_c) * 255)
             cv2.fillConvexPoly(color_layer, pts, color)
             cv2.fillConvexPoly(alpha_layer, pts, alpha_byte)
             # Draw thick edges on overlay layers to seal rasterization gaps
@@ -288,8 +292,10 @@ def _process_frame(args):
     if depth_path is not None and detections:
         depth_image = np.load(depth_path)
         h, w = frame.shape[:2]
+        mesh_cfg = _worker_hud_cfg.get("mesh") if _worker_hud_cfg else None
         frame = draw_depth_overlay(frame, depth_image, detections,
-                                   (depth_image.shape[1] / w, depth_image.shape[0] / h))
+                                   (depth_image.shape[1] / w, depth_image.shape[0] / h),
+                                   mesh_cfg)
 
     if servo_state is not None:
         frame = draw_hud(frame, servo_state, _worker_hud_cfg)
