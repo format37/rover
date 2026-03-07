@@ -60,7 +60,9 @@ def _sample_depth(px, py, depth_image, sx, sy):
     return float(depth_image[dpy, dpx])
 
 
-def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy):
+def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy,
+                              gamma=1.0, cutoff=0.0,
+                              pct_near=5, pct_far=95):
     """Generate variable-density points: denser where depth is closer."""
     # LOD levels: (grid_step_divisor, closeness_threshold)
     # Level 0 (coarse): always present
@@ -90,24 +92,33 @@ def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy):
     if not depths:
         return np.empty((0, 2)), np.empty(0), 0, 1
 
-    d_min = np.percentile(depths, 5)
-    d_max = np.percentile(depths, 95)
+    d_min = np.percentile(depths, pct_near)
+    d_max = np.percentile(depths, pct_far)
     d_range = max(d_max - d_min, 1)
 
     # Collect unique points across all LOD levels
+    # Each level gets an offset (fraction of cell size) to break grid alignment
+    offsets = [0.0, 0.37, 0.23, 0.41, 0.31]
     point_set = set()
-    for divisions, threshold in levels:
+    for li, (divisions, threshold) in enumerate(levels):
+        cell_w = w / divisions
+        cell_h = h / divisions
+        off = offsets[li]
         for gy in range(divisions + 1):
             for gx in range(divisions + 1):
-                px = x1 + w * gx / divisions
-                py = y1 + h * gy / divisions
+                px = x1 + w * gx / divisions + cell_w * off
+                py = y1 + h * gy / divisions + cell_h * off
+                px = min(max(px, x1), x2)
+                py = min(max(py, y1), y2)
                 d = _sample_depth(px, py, depth_image, sx, sy)
                 if d > 0:
                     closeness = np.clip(1.0 - (d - d_min) / d_range, 0, 1)
+                    closeness = closeness ** gamma
                 else:
                     closeness = 0
+                if closeness < cutoff:
+                    continue
                 if closeness >= threshold:
-                    # Quantize to avoid near-duplicates
                     key = (round(px, 1), round(py, 1))
                     point_set.add(key)
 
@@ -136,6 +147,10 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
     alpha_min = mesh_cfg.get("fill_alpha_min", 0.15) if mesh_cfg else 0.15
     alpha_max = mesh_cfg.get("fill_alpha_max", 0.40) if mesh_cfg else 0.40
     darken = mesh_cfg.get("darken", 0.5) if mesh_cfg else 0.5
+    gamma = mesh_cfg.get("gamma", 1.0) if mesh_cfg else 1.0
+    cutoff = mesh_cfg.get("cutoff", 0.0) if mesh_cfg else 0.0
+    pct_near = mesh_cfg.get("depth_pct_near", 5) if mesh_cfg else 5
+    pct_far = mesh_cfg.get("depth_pct_far", 95) if mesh_cfg else 95
 
     # Build heatmap LUT from config: far → mid → near
     c_far = np.array(mesh_cfg.get("color_far", [255, 255, 255])) if mesh_cfg else np.array([255, 255, 255])
@@ -166,7 +181,8 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
 
         # Generate adaptive point cloud
         points, point_depths, d_min, d_range = _generate_adaptive_points(
-            x1, y1, x2, y2, depth_image, sx, sy)
+            x1, y1, x2, y2, depth_image, sx, sy, gamma, cutoff,
+            pct_near, pct_far)
 
         if len(points) < 3:
             continue
@@ -180,8 +196,8 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                 c = np.clip(1.0 - (d - d_min) / d_range, 0, 1)
             else:
                 c = 0
-            closeness[i] = c
-            displaced[i, 1] -= c * max_displace
+            closeness[i] = c ** gamma
+            displaced[i, 1] -= closeness[i] * max_displace
 
         # Delaunay triangulation
         rect = (x1 - 1, y1 - max_displace - 1,
@@ -228,6 +244,8 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                 verts_c.append(closeness[idx] if idx is not None else 0)
 
             avg_c = sum(verts_c) / 3
+            if avg_c < cutoff:
+                continue
             lut_idx = min(255, max(0, int(avg_c * 255)))
             color = tuple(int(v) for v in heatmap_lut[lut_idx])
 
@@ -281,9 +299,29 @@ def _init_worker(hud_cfg):
     _worker_hud_cfg = hud_cfg
 
 
+def _draw_debug_sources(frame, debug_info):
+    """Draw source filenames/timestamps in bottom-left."""
+    lines = [
+        f"RGB:   {debug_info['rgb']}",
+        f"Depth: {debug_info['depth']}",
+        f"YOLO:  {debug_info['yolo']}",
+        f"Servo: {debug_info['servo']}",
+    ]
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fs, ft = 0.4, 1
+    lh = 18
+    x, y = 8, frame.shape[0] - 8 - lh * (len(lines) - 1)
+    # Background
+    cv2.rectangle(frame, (x - 4, y - 14), (x + 340, y + lh * (len(lines) - 1) + 6),
+                  (0, 0, 0), -1)
+    for i, line in enumerate(lines):
+        cv2.putText(frame, line, (x, y + i * lh), font, fs,
+                    (180, 180, 180), ft, cv2.LINE_AA)
+
+
 def _process_frame(args):
     """Process a single frame (runs in worker process)."""
-    rgb_path, depth_path, detections, servo_state = args
+    rgb_path, depth_path, detections, servo_state, debug_info = args
     frame = cv2.imread(rgb_path)
     if frame is None:
         return None
@@ -298,6 +336,9 @@ def _process_frame(args):
 
     if servo_state is not None:
         frame = draw_hud(frame, servo_state, _worker_hud_cfg)
+
+    if _worker_hud_cfg and _worker_hud_cfg.get("debug_sources"):
+        _draw_debug_sources(frame, debug_info)
 
     return frame
 
@@ -315,6 +356,8 @@ def main():
                         help="Max seconds to reuse a YOLO detection (default: 3.0)")
     parser.add_argument("--label", type=str, default="person",
                         help="Only show this detection label (empty=all)")
+    parser.add_argument("--frame", type=str, default=None,
+                        help="Render single frame from this depth file (saves PNG)")
     parser.add_argument("--workers", type=int, default=0,
                         help="Parallel workers (default: auto)")
     args = parser.parse_args()
@@ -373,6 +416,118 @@ def main():
     # Load HUD config
     hud_cfg = load_hud_config()
 
+    # Single frame mode
+    if args.frame:
+        depth_name = Path(args.frame).stem
+        depth_ts = parse_timestamp(depth_name)
+
+        # Find closest RGB
+        rgb_idx = find_closest(depth_ts, rgb_timestamps, 5.0)
+        if rgb_idx < 0:
+            print("No RGB frame found near that depth frame")
+            sys.exit(1)
+
+        rgb_path = str(rgb_timestamps[rgb_idx][1])
+        depth_path = str(session / "depth" / Path(args.frame).name)
+
+        yolo_idx = find_closest(depth_ts, yolo_entries, args.max_yolo_gap)
+        detections = yolo_entries[yolo_idx][1].get("detections", []) if yolo_idx >= 0 else []
+        yolo_ts = yolo_entries[yolo_idx][1].get("timestamp", "") if yolo_idx >= 0 else ""
+        if args.label:
+            detections = [d for d in detections if d.get("label") == args.label]
+
+        servo_state = None
+        servo_ts = ""
+        if servo_entries:
+            servo_idx = find_closest(depth_ts, servo_entries, 1.0)
+            if servo_idx >= 0:
+                servo_state = servo_entries[servo_idx][1]
+                servo_ts = servo_state.get("timestamp", "")
+
+        debug_info = {
+            "rgb": Path(rgb_path).name,
+            "depth": Path(depth_path).name,
+            "yolo": yolo_ts or "-",
+            "servo": servo_ts or "-",
+        }
+
+        print(f"RGB:   {debug_info['rgb']}")
+        print(f"Depth: {debug_info['depth']}")
+        print(f"YOLO:  {debug_info['yolo']}  ({len(detections)} detections)")
+        print(f"Servo: {debug_info['servo']}")
+
+        _init_worker(hud_cfg)
+        frame = _process_frame((rgb_path, depth_path, detections, servo_state, debug_info))
+
+        out_base = args.output or f"/tmp/frame_{depth_name}.png"
+        out_stem = out_base.rsplit(".", 1)[0]
+        cv2.imwrite(out_base, frame)
+        print(f"Saved: {out_base}")
+
+        # Debug depth heatmaps — per-bbox, matching what the mesh sees
+        depth_image = np.load(depth_path)
+        img_h, img_w = cv2.imread(rgb_path).shape[:2]
+        dep_h, dep_w = depth_image.shape[:2]
+        mesh_cfg = hud_cfg.get("mesh", {})
+        gm = mesh_cfg.get("gamma", 1.0)
+        co = mesh_cfg.get("cutoff", 0.0)
+        pn = mesh_cfg.get("depth_pct_near", 5)
+        pf = mesh_cfg.get("depth_pct_far", 95)
+        dsx, dsy = dep_w / img_w, dep_h / img_h
+
+        # Global linear heatmap (full frame, p5-p95)
+        d = depth_image.astype(np.float32)
+        d[d == 0] = np.nan
+        d_min_g, d_max_g = np.nanpercentile(d, [5, 95])
+        d_range_g = max(d_max_g - d_min_g, 1)
+        linear = np.clip((d - d_min_g) / d_range_g, 0, 1)
+        linear = np.nan_to_num(linear, nan=0)
+        hm_linear = cv2.applyColorMap((linear * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
+        hm_linear[depth_image == 0] = 0
+
+        # Draw detection bboxes on heatmaps
+        for det in detections:
+            bx, by, bw, bh = [int(v) for v in det["bbox"]]
+            dx1, dy1 = int(bx * dsx), int(by * dsy)
+            dx2, dy2 = int((bx + bw) * dsx), int((by + bh) * dsy)
+            cv2.rectangle(hm_linear, (dx1, dy1), (dx2, dy2), (255, 255, 255), 1)
+
+        out_hm = f"{out_stem}_depth.png"
+        cv2.imwrite(out_hm, hm_linear)
+        print(f"Saved: {out_hm}")
+
+        # Per-bbox adjusted heatmap (gamma + cutoff + configurable percentiles)
+        hm_adjusted = np.zeros_like(hm_linear)
+        for det in detections:
+            bx, by, bw, bh = [int(v) for v in det["bbox"]]
+            dx1 = max(0, int(bx * dsx))
+            dy1 = max(0, int(by * dsy))
+            dx2 = min(dep_w, int((bx + bw) * dsx))
+            dy2 = min(dep_h, int((by + bh) * dsy))
+            region = depth_image[dy1:dy2, dx1:dx2].astype(np.float32)
+            region[region == 0] = np.nan
+            valid = region[~np.isnan(region)]
+            if len(valid) < 10:
+                continue
+            d_min_b = np.percentile(valid, pn)
+            d_max_b = np.percentile(valid, pf)
+            d_range_b = max(d_max_b - d_min_b, 1)
+            closeness = np.clip(1.0 - (region - d_min_b) / d_range_b, 0, 1)
+            closeness = np.nan_to_num(closeness, nan=0)
+            closeness = closeness ** gm
+            closeness[closeness < co] = 0
+            bbox_hm = cv2.applyColorMap((closeness * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
+            bbox_hm[depth_image[dy1:dy2, dx1:dx2] == 0] = 0
+            hm_adjusted[dy1:dy2, dx1:dx2] = bbox_hm
+            cv2.rectangle(hm_adjusted, (dx1, dy1), (dx2, dy2), (255, 255, 255), 1)
+            print(f"  {det['label']}: d_range=[{d_min_b:.0f}, {d_max_b:.0f}] "
+                  f"(pct {pn}-{pf})")
+
+        out_adj = f"{out_stem}_depth_adjusted.png"
+        cv2.imwrite(out_adj, hm_adjusted)
+        print(f"Saved: {out_adj}")
+        return
+
     # Output path
     output_path = args.output or str(session) + ".mp4"
 
@@ -403,17 +558,26 @@ def main():
 
         yolo_idx = find_closest(rgb_ts, yolo_entries, args.max_yolo_gap)
         detections = yolo_entries[yolo_idx][1].get("detections", []) if yolo_idx >= 0 else []
+        yolo_ts = yolo_entries[yolo_idx][1].get("timestamp", "") if yolo_idx >= 0 else ""
         if args.label:
             detections = [d for d in detections if d.get("label") == args.label]
 
         servo_state = None
+        servo_ts = ""
         if has_servo:
             servo_idx = find_closest(rgb_ts, servo_entries, 1.0)
             if servo_idx >= 0:
                 last_servo_state = servo_entries[servo_idx][1]
+                servo_ts = last_servo_state.get("timestamp", "")
             servo_state = dict(last_servo_state)
 
-        frame_args.append((str(rgb_path), depth_path, detections, servo_state))
+        debug_info = {
+            "rgb": Path(rgb_path).name,
+            "depth": Path(depth_path).name if depth_path else "-",
+            "yolo": yolo_ts or "-",
+            "servo": servo_ts or "-",
+        }
+        frame_args.append((str(rgb_path), depth_path, detections, servo_state, debug_info))
 
     # Parallel processing
     n_workers = args.workers if args.workers > 0 else min(os.cpu_count() or 4, 8)
