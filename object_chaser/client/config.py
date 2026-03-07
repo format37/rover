@@ -7,6 +7,9 @@ NORMAL_SERVO_SPEED = 120
 SEARCH_SERVO_SPEED = 20
 CAMERA_FOV = 87
 
+# Detection
+DETECTION_CONFIDENCE_MIN = 0.4 # Ignore detections below this confidence
+
 # Tracking thresholds
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)

@@ -8,7 +8,8 @@ import aiohttp
 import cv2
 import numpy as np
 import chase
-from config import CAMERA_SERVER_URL, YOLO_URL, STALE_FRAME_SECONDS
+from config import (CAMERA_SERVER_URL, YOLO_URL, STALE_FRAME_SECONDS,
+                     DETECTION_CONFIDENCE_MIN)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -76,7 +77,8 @@ async def run(label='person'):
                     yolo_result = await resp.json()
 
                 detections = [d for d in yolo_result['detections']
-                              if d['label'] == label]
+                              if d['label'] == label
+                              and d['confidence'] >= DETECTION_CONFIDENCE_MIN]
 
                 if detections:
                     best = max(detections, key=lambda d: d['confidence'])

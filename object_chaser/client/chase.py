@@ -47,6 +47,7 @@ _detected_angle = SERVO_CENTER
 _search_sweeps = 0
 _search_target = 0
 _search_started = False
+_search_direction = 0          # 0 = start right (toward 0), 1 = start left (toward 180)
 _orient_phase = "centering"
 _orient_pivot_end = None
 _tracks_moving = False
@@ -394,11 +395,13 @@ def _orient_start():
 
 
 def _search_start():
-    global _search_sweeps, _search_target, _search_started
+    global _search_sweeps, _search_target, _search_started, _search_direction
     _search_sweeps = 0
-    _search_target = 0
+    # Alternate start direction: 0 = look right first, 1 = look left first
+    _search_target = 0 if _search_direction == 0 else 180
+    _search_direction = 1 - _search_direction  # swap for next time
     _search_started = True
     _stop_tracks()
     _send_servo_speed(SEARCH_SERVO_SPEED)
     _send_servo(_search_target)
-    logger.info("Search: starting sweep")
+    logger.info(f"Search: starting sweep toward {_search_target}deg")
