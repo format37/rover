@@ -113,11 +113,11 @@ def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy,
                 d = _sample_depth(px, py, depth_image, sx, sy)
                 if d > 0:
                     closeness = np.clip(1.0 - (d - d_min) / d_range, 0, 1)
-                    closeness = closeness ** gamma
                 else:
                     closeness = 0
                 if closeness < cutoff:
                     continue
+                closeness = closeness ** gamma
                 if closeness >= threshold:
                     key = (round(px, 1), round(py, 1))
                     point_set.add(key)
@@ -188,6 +188,7 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
             continue
 
         # Compute closeness and displaced positions
+        closeness_raw = np.zeros(len(points))
         closeness = np.zeros(len(points))
         displaced = points.copy()
         for i in range(len(points)):
@@ -196,6 +197,7 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                 c = np.clip(1.0 - (d - d_min) / d_range, 0, 1)
             else:
                 c = 0
+            closeness_raw[i] = c
             closeness[i] = c ** gamma
             displaced[i, 1] -= closeness[i] * max_displace
 
@@ -238,13 +240,15 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                 continue
 
             verts_c = []
+            verts_raw = []
             for vx, vy in [(ax, ay), (bxx, byy), (cx, cy)]:
                 key = (round(vx, 1), round(vy, 1))
                 idx = pt_lookup.get(key)
                 verts_c.append(closeness[idx] if idx is not None else 0)
+                verts_raw.append(closeness_raw[idx] if idx is not None else 0)
 
             avg_c = sum(verts_c) / 3
-            if avg_c < cutoff:
+            if sum(verts_raw) / 3 < cutoff:
                 continue
             lut_idx = min(255, max(0, int(avg_c * 255)))
             color = tuple(int(v) for v in heatmap_lut[lut_idx])

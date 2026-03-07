@@ -38,8 +38,8 @@ hud:
     fill_alpha_min: 0.0    # fill opacity for farthest triangles
     fill_alpha_max: 0.0    # fill opacity for nearest triangles
     darken: 1.0            # background darkening behind mesh (0=black, 1=none)
-    gamma: 3.5              # depth curve: >1 = more contrast on near, 1 = linear
-    cutoff: 0.1               # skip triangles with closeness below this (0 = show all)
+    gamma: 1.5              # depth curve: >1 = more contrast on near, 1 = linear
+    cutoff: 0.0               # skip triangles with closeness below this (0 = show all)
     depth_pct_near: 25      # percentile for near boundary (lower = wider range)
     depth_pct_far: 75       # percentile for far boundary (higher = wider range)
     # Wireframe color gradient (BGR): far → mid → near
