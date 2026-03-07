@@ -49,88 +49,182 @@ def find_closest(target_ts: float, candidates: list, max_gap: float) -> int:
     return best
 
 
-def colorize_depth(depth_crop: np.ndarray) -> np.ndarray:
-    """Convert uint16 depth crop to a colormap visualization."""
-    valid = depth_crop[depth_crop > 0]
-    if len(valid) == 0:
-        return np.zeros((*depth_crop.shape, 3), dtype=np.uint8)
-    vmin, vmax = np.percentile(valid, [5, 95])
-    normalized = np.clip((depth_crop.astype(float) - vmin) / max(vmax - vmin, 1), 0, 1)
-    normalized = (normalized * 255).astype(np.uint8)
-    # Zero depth stays black
-    normalized[depth_crop == 0] = 0
-    colored = cv2.applyColorMap(normalized, cv2.COLORMAP_TURBO)
-    colored[depth_crop == 0] = 0
-    return colored
+def _sample_depth(px, py, depth_image, sx, sy):
+    """Sample depth value at image pixel (px, py)."""
+    dep_h, dep_w = depth_image.shape[:2]
+    dpx = min(dep_w - 1, max(0, int(px * sx)))
+    dpy = min(dep_h - 1, max(0, int(py * sy)))
+    return float(depth_image[dpy, dpx])
+
+
+def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy):
+    """Generate variable-density points: denser where depth is closer."""
+    # LOD levels: (grid_step_divisor, closeness_threshold)
+    # Level 0 (coarse): always present
+    # Level 1+: only where closeness exceeds threshold
+    levels = [
+        (4, 0.0),    # 4x4 base — always
+        (8, 0.15),   # 8x8 — mild detail
+        (16, 0.35),  # 16x16 — medium
+        (32, 0.55),  # 32x32 — fine
+        (48, 0.75),  # 48x48 — ultra fine for very close
+    ]
+
+    w = x2 - x1
+    h = y2 - y1
+
+    # First pass: build a coarse closeness map for LOD decisions
+    sample_n = 8
+    depths = []
+    for sy_i in range(sample_n + 1):
+        for sx_i in range(sample_n + 1):
+            px = x1 + w * sx_i / sample_n
+            py = y1 + h * sy_i / sample_n
+            d = _sample_depth(px, py, depth_image, sx, sy)
+            if d > 0:
+                depths.append(d)
+
+    if not depths:
+        return np.empty((0, 2)), np.empty(0), 0, 1
+
+    d_min = np.percentile(depths, 5)
+    d_max = np.percentile(depths, 95)
+    d_range = max(d_max - d_min, 1)
+
+    # Collect unique points across all LOD levels
+    point_set = set()
+    for divisions, threshold in levels:
+        for gy in range(divisions + 1):
+            for gx in range(divisions + 1):
+                px = x1 + w * gx / divisions
+                py = y1 + h * gy / divisions
+                d = _sample_depth(px, py, depth_image, sx, sy)
+                if d > 0:
+                    closeness = np.clip(1.0 - (d - d_min) / d_range, 0, 1)
+                else:
+                    closeness = 0
+                if closeness >= threshold:
+                    # Quantize to avoid near-duplicates
+                    key = (round(px, 1), round(py, 1))
+                    point_set.add(key)
+
+    if len(point_set) < 3:
+        return np.empty((0, 2)), np.empty(0), d_min, d_range
+
+    points = np.array(list(point_set), dtype=np.float64)
+    # Sample depth at final points
+    point_depths = np.array([
+        _sample_depth(p[0], p[1], depth_image, sx, sy) for p in points
+    ])
+
+    return points, point_depths, d_min, d_range
 
 
 def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                        detections: list, depth_scale: tuple) -> np.ndarray:
-    """Draw depth-colormap crops above the RGB frame for each detection."""
+    """Draw Tron-style adaptive triangle mesh on detected objects."""
     img_h, img_w = frame.shape[:2]
     dep_h, dep_w = depth_image.shape[:2]
     sx = dep_w / img_w
     sy = dep_h / img_h
 
+    max_displace = 30
+    color_bright = np.array([220, 200, 50], dtype=np.float64)
+    color_dim = np.array([100, 80, 20], dtype=np.float64)
+
     for det in detections:
         bbox = det["bbox"]
         label = det["label"]
         conf = det["confidence"]
-        x, y, w, h = [int(v) for v in bbox]
+        bx, by, bw, bh = [int(v) for v in bbox]
 
-        # Crop depth in depth coordinates
-        dx1 = max(0, int(x * sx))
-        dy1 = max(0, int(y * sy))
-        dx2 = min(dep_w, int((x + w) * sx))
-        dy2 = min(dep_h, int((y + h) * sy))
-        if dx2 <= dx1 or dy2 <= dy1:
+        x1 = max(0, bx)
+        y1 = max(0, by)
+        x2 = min(img_w, bx + bw)
+        y2 = min(img_h, by + bh)
+        if x2 - x1 < 20 or y2 - y1 < 20:
             continue
 
-        depth_crop = depth_image[dy1:dy2, dx1:dx2]
-        colored_crop = colorize_depth(depth_crop)
+        # Generate adaptive point cloud
+        points, point_depths, d_min, d_range = _generate_adaptive_points(
+            x1, y1, x2, y2, depth_image, sx, sy)
 
-        # Resize depth crop to match bbox size in RGB coordinates
-        overlay_w = min(w, img_w - x)
-        overlay_h = min(h, img_h)
-        if overlay_w <= 0 or overlay_h <= 0:
+        if len(points) < 3:
             continue
-        colored_resized = cv2.resize(colored_crop, (overlay_w, overlay_h),
-                                     interpolation=cv2.INTER_NEAREST)
 
-        # Place above the bbox (or at top if not enough space)
-        oy = max(0, y - overlay_h)
-        ox = max(0, min(x, img_w - overlay_w))
-        # Clamp
-        place_h = min(overlay_h, img_h - oy)
-        place_w = min(overlay_w, img_w - ox)
+        # Compute closeness and displaced positions
+        closeness = np.zeros(len(points))
+        displaced = points.copy()
+        for i in range(len(points)):
+            d = point_depths[i]
+            if d > 0:
+                c = np.clip(1.0 - (d - d_min) / d_range, 0, 1)
+            else:
+                c = 0
+            closeness[i] = c
+            displaced[i, 1] -= c * max_displace
 
-        # Blend: semi-transparent overlay
-        alpha = 0.8
-        roi = frame[oy:oy + place_h, ox:ox + place_w]
-        frame[oy:oy + place_h, ox:ox + place_w] = cv2.addWeighted(
-            colored_resized[:place_h, :place_w], alpha, roi, 1 - alpha, 0)
+        # Delaunay triangulation
+        rect = (x1 - 1, y1 - max_displace - 1,
+                x2 - x1 + 2, y2 - y1 + max_displace + 2)
+        subdiv = cv2.Subdiv2D(rect)
+        for pt in displaced:
+            try:
+                subdiv.insert((float(pt[0]), float(pt[1])))
+            except cv2.error:
+                pass
 
-        # Border around depth overlay
-        cv2.rectangle(frame, (ox, oy), (ox + place_w - 1, oy + place_h - 1),
-                      (255, 255, 255), 1)
+        triangles = subdiv.getTriangleList()
 
-        # Label inside depth overlay
+        # Build lookup: displaced coord → index (for closeness)
+        pt_lookup = {}
+        for i, pt in enumerate(displaced):
+            key = (round(pt[0], 1), round(pt[1], 1))
+            pt_lookup[key] = i
+
+        # Darken bbox region
+        cy1 = max(0, y1 - max_displace)
+        roi = frame[cy1:y2, x1:x2].copy()
+        frame[cy1:y2, x1:x2] = (roi * 0.5).astype(np.uint8)
+
+        # Draw triangles
+        rx1, ry1, rx2, ry2 = float(x1), float(y1 - max_displace), float(x2), float(y2)
+
+        for t in triangles:
+            ax, ay, bxx, byy, cx, cy = t
+            # Skip triangles outside bbox
+            if (ax < rx1 or ax > rx2 or bxx < rx1 or bxx > rx2 or
+                cx < rx1 or cx > rx2 or ay < ry1 or ay > ry2 or
+                byy < ry1 or byy > ry2 or cy < ry1 or cy > ry2):
+                continue
+
+            # Find closeness for each vertex
+            verts_c = []
+            for vx, vy in [(ax, ay), (bxx, byy), (cx, cy)]:
+                key = (round(vx, 1), round(vy, 1))
+                idx = pt_lookup.get(key)
+                verts_c.append(closeness[idx] if idx is not None else 0)
+
+            avg_c = sum(verts_c) / 3
+            color = color_dim + (color_bright - color_dim) * avg_c
+            color = tuple(int(v) for v in color)
+
+            pts = np.array([(int(ax), int(ay)), (int(bxx), int(byy)),
+                            (int(cx), int(cy))], dtype=np.int32)
+            cv2.polylines(frame, [pts], True, color, 1, cv2.LINE_AA)
+
+        # Label
         text = f"{label} {conf:.0%}"
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = max(0.4, min(place_w / 200, 1.0))
+        font_scale = max(0.4, min(bw / 200, 1.0))
         thickness = max(1, int(font_scale * 2))
         (tw, th), _ = cv2.getTextSize(text, font, font_scale, thickness)
-        tx = ox + 4
-        ty = oy + th + 4
-        # Background for text readability
-        cv2.rectangle(frame, (tx - 2, ty - th - 2), (tx + tw + 2, ty + 2), (0, 0, 0), -1)
-        cv2.putText(frame, text, (tx, ty), font, font_scale, (255, 255, 255), thickness)
-
-        # Thin bbox outline on RGB
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 255), 1)
-        # Connecting lines from bbox top to depth overlay bottom
-        cv2.line(frame, (ox, oy + place_h), (x, y), (255, 255, 255), 1)
-        cv2.line(frame, (ox + place_w, oy + place_h), (x + w, y), (255, 255, 255), 1)
+        tx = x1 + 4
+        ty = y1 - 8 if y1 > th + 12 else y1 + th + 4
+        cv2.rectangle(frame, (tx - 2, ty - th - 2), (tx + tw + 2, ty + 2),
+                      (10, 15, 10), -1)
+        cv2.putText(frame, text, (tx, ty), font, font_scale,
+                    tuple(int(v) for v in color_bright), thickness, cv2.LINE_AA)
 
     return frame
 
