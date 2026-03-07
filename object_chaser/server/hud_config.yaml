@@ -37,7 +37,11 @@ hud:
   mesh:
     fill_alpha_min: 0.0    # fill opacity for farthest triangles
     fill_alpha_max: 0.0    # fill opacity for nearest triangles
-    darken: 1.0             # background darkening behind mesh (0=black, 1=none)
+    darken: 1.0            # background darkening behind mesh (0=black, 1=none)
+    # Wireframe color gradient (BGR): far → mid → near
+    color_far: [30, 80, 30]       # dark green
+    color_mid: [50, 170, 50]      # medium green
+    color_near: [100, 255, 120]   # light green
 
   # Spacing between elements
   gap: 30

@@ -137,20 +137,19 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
     alpha_max = mesh_cfg.get("fill_alpha_max", 0.40) if mesh_cfg else 0.40
     darken = mesh_cfg.get("darken", 0.5) if mesh_cfg else 0.5
 
-    # Custom heatmap LUT: white (far) → lightning-blue (mid) → green (near)
+    # Build heatmap LUT from config: far → mid → near
+    c_far = np.array(mesh_cfg.get("color_far", [255, 255, 255])) if mesh_cfg else np.array([255, 255, 255])
+    c_mid = np.array(mesh_cfg.get("color_mid", [255, 200, 50])) if mesh_cfg else np.array([255, 200, 50])
+    c_near = np.array(mesh_cfg.get("color_near", [50, 255, 80])) if mesh_cfg else np.array([50, 255, 80])
     heatmap_lut = np.zeros((256, 3), dtype=np.uint8)
-    # BGR anchors
-    white = np.array([255, 255, 255])
-    blue = np.array([255, 200, 50])    # electric/lightning blue
-    green = np.array([50, 255, 80])
     for i in range(256):
         t = i / 255.0
         if t < 0.5:
             f = t / 0.5
-            heatmap_lut[i] = (white * (1 - f) + blue * f).astype(np.uint8)
+            heatmap_lut[i] = (c_far * (1 - f) + c_mid * f).astype(np.uint8)
         else:
             f = (t - 0.5) / 0.5
-            heatmap_lut[i] = (blue * (1 - f) + green * f).astype(np.uint8)
+            heatmap_lut[i] = (c_mid * (1 - f) + c_near * f).astype(np.uint8)
 
     for det in detections:
         bbox = det["bbox"]
@@ -314,6 +313,8 @@ def main():
                         help="Max seconds to reuse a depth frame (default: 2.0)")
     parser.add_argument("--max-yolo-gap", type=float, default=3.0,
                         help="Max seconds to reuse a YOLO detection (default: 3.0)")
+    parser.add_argument("--label", type=str, default="person",
+                        help="Only show this detection label (empty=all)")
     parser.add_argument("--workers", type=int, default=0,
                         help="Parallel workers (default: auto)")
     args = parser.parse_args()
@@ -402,6 +403,8 @@ def main():
 
         yolo_idx = find_closest(rgb_ts, yolo_entries, args.max_yolo_gap)
         detections = yolo_entries[yolo_idx][1].get("detections", []) if yolo_idx >= 0 else []
+        if args.label:
+            detections = [d for d in detections if d.get("label") == args.label]
 
         servo_state = None
         if has_servo:
