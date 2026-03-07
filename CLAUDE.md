@@ -23,7 +23,7 @@ The active system is **object_chaser/** with a 4-process architecture:
 - `servo_api.py` — ServoController (smooth threaded movement) + TrackController (PCA9685 tank tracks). All movement has safety auto-stop timeouts.
 
 **Client** (`object_chaser/client/`):
-- `client.py` — Head-only tracking (servo follows detected object, owns camera directly via CameraController)
+- `client.py` — Head-only tracking (servo follows detected object, fetches frames from camera server)
 - `body_follow.py` — Full autonomous behavior: fetches frames from camera server, head tracking → body rotation → forward driving with differential steering → depth-based collision avoidance → search mode when target lost. Logs detections to `yolo/detections.jsonl` in the session folder.
 - `camera_controls.py` — RealSense async wrapper with optional depth alignment and filtering (used by client.py only)
 
@@ -50,8 +50,8 @@ python3.8 servo_api.py
 
 # Terminal 4: Client (pick one)
 cd ~/projects/rover/object_chaser/client/
-python3.8 client.py --label person           # head tracking only (uses own camera)
-python3.8 body_follow.py --label person      # full body follow (uses camera server)
+python3.8 client.py --label person           # head tracking only
+python3.8 body_follow.py --label person      # full body follow
 ```
 
 ## Key behavior parameters (body_follow.py)

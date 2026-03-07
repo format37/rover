@@ -4,11 +4,10 @@ import os
 import argparse
 import asyncio
 from tqdm import tqdm
-from camera_controls import CameraController
 import cv2
 import logging
 import aiohttp
-from tqdm import tqdm
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -19,6 +18,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 servo_api_url = 'http://localhost:8000'
+camera_server_url = 'http://localhost:8080'
 
 # Global bar for goal progress
 bar = None
@@ -60,81 +60,77 @@ def update_goal(new_goal):
     # logger.info(f"Updated goal to {target_angle} degrees")
     # time.sleep(2) # Debugging delay to avoid too rapid commands
 
-async def process_camera_feed(server_url, label='person', output_dir='.', enable_depth=False):
+async def process_camera_feed(server_url, label='person'):
     print(f"Processing camera feed, tracking label='{label}' (infinite loop, Ctrl+C to stop)")
     url = f"{server_url}/detect/"
     server_times = []
     start_time = time.time()
     request_count = 0
-    async with CameraController(output_dir=output_dir, enable_depth=enable_depth) as camera:
-        async with aiohttp.ClientSession() as session:
-            try:
-                while True:
-                    depth_image, color_image = await camera.get_frames()
-                    # if request_count == 0 or request_count == num_requests - 1:
-                    #     await camera.save_frames(depth_image, color_image)
-                    _, img_encoded = cv2.imencode('.jpg', color_image)
-                    image_data = img_encoded.tobytes()
-                    async with session.post(url, data={'file': image_data}) as response:
-                        if response.status == 200:
-                            result = await response.json()
-                            server_times.append(result['processing_time'])
-                            label_detections = [d for d in result['detections'] if d['label'] == label]
-                            if label_detections:
-                                best_person = max(label_detections, key=lambda d: d['confidence'])
-                                x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2 # Left + width/2
-                                x_normalized = x_middle / color_image.shape[1] # between 0=left and 1=right
-                                x_normalized = 1-x_normalized # Invert: 0=right, 1=left
-                                logger.info(f"Best person detection: {best_person}, x_normalized={x_normalized:.2f}")
-                                
-                                servo_range = 180
-                                response = requests.get(f"{servo_api_url}/status", timeout=0.1)
-                                if response.status_code == 200:
-                                    status = response.json()
-                                    current_servo_angle = status.get('current_position')
-                                    logger.info(f"Current servo angle: {current_servo_angle}")
-                                    servo_status = status.get('status')
-                                    logger.info(f"Servo status: {servo_status}")
+    async with aiohttp.ClientSession() as session:
+        try:
+            while True:
+                # Fetch latest frame from camera server
+                async with session.get(f"{camera_server_url}/frame") as frame_resp:
+                    if frame_resp.status != 200:
+                        logger.warning(f"Camera server error: {frame_resp.status}")
+                        await asyncio.sleep(0.1)
+                        continue
+                    image_data = await frame_resp.read()
+
+                async with session.post(url, data={'file': image_data}) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        server_times.append(result['processing_time'])
+                        label_detections = [d for d in result['detections'] if d['label'] == label]
+                        if label_detections:
+                            best_person = max(label_detections, key=lambda d: d['confidence'])
+
+                            # Decode JPEG to get image dimensions
+                            img_array = np.frombuffer(image_data, dtype=np.uint8)
+                            color_image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                            img_width = color_image.shape[1]
+
+                            x_middle = best_person['bbox'][0] + best_person['bbox'][2] / 2
+                            x_normalized = x_middle / img_width
+                            x_normalized = 1-x_normalized  # Invert: 0=right, 1=left
+                            logger.info(f"Best person detection: {best_person}, x_normalized={x_normalized:.2f}")
+
+                            servo_range = 180
+                            response = requests.get(f"{servo_api_url}/status", timeout=0.1)
+                            if response.status_code == 200:
+                                status = response.json()
+                                current_servo_angle = status.get('current_position')
+                                logger.info(f"Current servo angle: {current_servo_angle}")
+                                servo_status = status.get('status')
+                                logger.info(f"Servo status: {servo_status}")
+                            else:
+                                logger.warning(f"Failed to get servo status: {response.status_code}")
+                                logger.warning(f"Response content: {response.content}")
+                                current_servo_angle = 90  # Default to center if error
+                            fov = 87  # Realsense D435 horizontal FOV
+                            camera_offset = (x_normalized - 0.5) * fov
+                            logger.info(f"Camera FOV: {fov}, offset from center (degrees): {camera_offset:.2f}")
+                            if abs(camera_offset) > 10:  # Only update if offset is significant
+                                new_goal_angle = current_servo_angle + camera_offset
+                                logger.info(f"New goal before clamp (degrees): {new_goal_angle:.2f}")
+                                new_goal_angle = max(0, min(servo_range, new_goal_angle))
+                                if new_goal_angle != current_servo_angle + camera_offset:
+                                    logger.info(
+                                        f"New goal clamped to servo range 0-{servo_range} degrees: {new_goal_angle:.2f}"
+                                    )
+                                new_goal = new_goal_angle / servo_range
+                                logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
+
+                                if servo_status == 'moving':
+                                    logger.info("Servo is currently moving, skipping goal update to avoid overload")
                                 else:
-                                    logger.warning(f"Failed to get servo status: {response.status_code}")
-                                    logger.warning(f"Response content: {response.content}")
-                                    current_servo_angle = 90 # Default to center if error
-                                fov = 87  # Realsense D435 horizontal FOV
-                                camera_offset = (x_normalized - 0.5) * fov
-                                logger.info(f"Camera FOV: {fov}, offset from center (degrees): {camera_offset:.2f}")
-                                if abs(camera_offset) > 10:  # Only update if offset is significant
-                                    new_goal_angle = current_servo_angle + camera_offset
-                                    logger.info(f"New goal before clamp (degrees): {new_goal_angle:.2f}")
-                                    new_goal_angle = max(0, min(servo_range, new_goal_angle))
-                                    if new_goal_angle != current_servo_angle + camera_offset:
-                                        logger.info(
-                                            f"New goal clamped to servo range 0-{servo_range} degrees: {new_goal_angle:.2f}"
-                                        )
-                                    new_goal = new_goal_angle / servo_range  # Convert back to normalized 0-1
-                                    logger.info(f"New goal (normalized 0-1): {new_goal:.2f}")
-                                    
+                                    update_goal(new_goal)
 
-                                    if servo_status == 'moving':
-                                        logger.info("Servo is currently moving, skipping goal update to avoid overload")
-                                    else:
-                                        update_goal(new_goal)
-
-                            annotated_image = color_image.copy()
-                            for detection in result['detections']:
-                                x, y, w, h = detection['bbox']
-                                cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                                x_middle = detection['bbox'][0] + detection['bbox'][2] / 2
-                                x_normalized = x_middle / color_image.shape[1]
-                                label = f"({x_normalized:.2f}, {color_image.shape[1]}, {detection['bbox']}) {detection['label']}"
-                                cv2.putText(annotated_image, label, (x, y - 10), 
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-                            # os.makedirs(output_dir, exist_ok=True)
-                            # cv2.imwrite(f"{output_dir}/annotated_image_{request_count}.jpg", annotated_image)
-                        else:
-                            print(f"Error: {response.status}, {await response.text()}")
-                    request_count += 1
-            except KeyboardInterrupt:
-                print("\nInterrupted by user.")
+                    else:
+                        print(f"Error: {response.status}, {await response.text()}")
+                request_count += 1
+        except KeyboardInterrupt:
+            print("\nInterrupted by user.")
     total_time = time.time() - start_time
     fps = request_count / total_time if total_time > 0 else 0
     return fps, total_time, server_times
@@ -159,8 +155,6 @@ async def main():
     args = parser.parse_args()
 
     server_url = 'http://localhost:8765'
-    output_dir = 'camera_output'
-    enable_depth = False
 
     logger.info("Initializing servo via API")
     try:
@@ -189,8 +183,6 @@ async def main():
         fps, total_time, server_times = await process_camera_feed(
             server_url,
             label=args.label,
-            output_dir=output_dir,
-            enable_depth=enable_depth
         )
         logger.info("\nPerformance Metrics:")
         logger.info(f"Total time: {total_time:.2f} seconds")

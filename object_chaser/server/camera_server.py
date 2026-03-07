@@ -9,6 +9,7 @@ import threading
 import time
 import queue
 import shutil
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
@@ -241,11 +242,9 @@ class CameraManager:
 
 camera_manager: Optional[CameraManager] = None
 
-app = FastAPI(title="Camera Server", version="1.0.0")
 
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app):
     global camera_manager
     camera_manager = CameraManager(
         session_dir=cli_args.session_dir,
@@ -253,12 +252,12 @@ async def startup_event():
         depth_interval=cli_args.depth_interval,
         frame_limit=cli_args.frame_limit,
     )
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
     if camera_manager:
         camera_manager.shutdown()
+
+
+app = FastAPI(title="Camera Server", version="1.0.0", lifespan=lifespan)
 
 
 @app.get("/frame")
