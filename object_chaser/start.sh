@@ -47,6 +47,8 @@ wait_for_http() {
     cleanup
 }
 
+export PYTHONUNBUFFERED=1
+
 echo "Starting object chaser (label=$LABEL)..."
 
 # 1. YOLO server
@@ -72,7 +74,7 @@ echo "  PID=$CAMERA_PID"
 echo "$YOLO_PID $SERVO_PID $CAMERA_PID" > "$PIDFILE"
 
 # Wait for all servers
-wait_for_http "Servo API"     "http://localhost:8000/status" "$SERVO_PID"  30  "$LOG_DIR/servo.log"
+wait_for_http "Servo API"     "http://localhost:8000/status" "$SERVO_PID"  60  "$LOG_DIR/servo.log"
 wait_for_http "Camera server" "http://localhost:8080/status" "$CAMERA_PID" 30  "$LOG_DIR/camera.log"
 wait_for_http "YOLO (warmup)" "http://localhost:8765/ready"  "$YOLO_PID"   120 "$LOG_DIR/yolo.log"
 
