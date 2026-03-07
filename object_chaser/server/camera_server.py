@@ -48,7 +48,8 @@ class CameraManager:
         self.rgb_dir = self.session_path / "rgb"
         self.depth_dir = self.session_path / "depth"
         self.yolo_dir = self.session_path / "yolo"
-        for d in (self.rgb_dir, self.depth_dir, self.yolo_dir):
+        self.servo_dir = self.session_path / "servo"
+        for d in (self.rgb_dir, self.depth_dir, self.yolo_dir, self.servo_dir):
             d.mkdir(parents=True, exist_ok=True)
 
         # Frame limit
@@ -308,6 +309,7 @@ async def get_session():
         return {
             "session_path": str(camera_manager.session_path),
             "yolo_dir": str(camera_manager.yolo_dir),
+            "servo_dir": str(camera_manager.servo_dir),
             "frame_count": camera_manager.frame_count,
             "frame_limit": camera_manager.frame_limit,
             "saving_active": camera_manager.saving_active,

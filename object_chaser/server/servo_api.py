@@ -4,8 +4,10 @@ Robust servo control API for Jetson Nano with smooth movement.
 Uses simple threading approach instead of async for better stability.
 """
 
+import json
 import time
 import threading
+from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +15,7 @@ from adafruit_servokit import ServoKit
 from board import SCL, SDA
 import busio
 from adafruit_pca9685 import PCA9685
+import requests as http_requests
 import uvicorn
 
 class ServoController:
@@ -159,6 +162,10 @@ class TrackController:
             p.channels[1].duty_cycle = 0xFFFF
         self._lock = threading.Lock()
         self._stop_timer = None
+        self.left_speed = 0.0
+        self.left_dir = 0
+        self.right_speed = 0.0
+        self.right_dir = 0
         print("Track controller initialized")
 
     def _set_track(self, track: int, speed: float, direction: int):
@@ -180,6 +187,10 @@ class TrackController:
                 self._stop_timer = None
             self._set_track(0, left_speed, left_dir)
             self._set_track(1, right_speed, right_dir)
+            self.left_speed = left_speed
+            self.left_dir = left_dir
+            self.right_speed = right_speed
+            self.right_dir = right_dir
         if duration > 0:
             self._stop_timer = threading.Timer(duration, self.stop)
             self._stop_timer.start()
@@ -196,9 +207,99 @@ class TrackController:
                 self._stop_timer = None
             self._set_track(0, 0, 0)
             self._set_track(1, 0, 0)
+            self.left_speed = 0.0
+            self.right_speed = 0.0
 
     def get_status(self) -> dict:
         return {"status": "ok"}
+
+
+class StateLogger:
+    """Logs servo angle and track state at ~10Hz to a JSONL file."""
+
+    CAMERA_SERVER_URL = "http://localhost:8080"
+    SAMPLE_INTERVAL = 0.1  # 10Hz
+
+    def __init__(self, servo: ServoController, tracks: Optional['TrackController']):
+        self.servo = servo
+        self.tracks = tracks
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._log_file = None
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        self._thread.join(timeout=2)
+        if self._log_file:
+            self._log_file.close()
+
+    def _resolve_log_path(self) -> Optional[str]:
+        """Query camera server for servo log directory."""
+        try:
+            resp = http_requests.get(f"{self.CAMERA_SERVER_URL}/session", timeout=2.0)
+            if resp.status_code == 200:
+                servo_dir = resp.json().get("servo_dir")
+                if servo_dir:
+                    return f"{servo_dir}/state.jsonl"
+        except Exception:
+            pass
+        return None
+
+    def _run(self):
+        # Wait for camera server to come up (it may start after servo_api)
+        log_path = None
+        for _ in range(60):
+            if self._stop_event.is_set():
+                return
+            log_path = self._resolve_log_path()
+            if log_path:
+                break
+            time.sleep(1)
+
+        if not log_path:
+            print("StateLogger: camera server not available, logging disabled")
+            return
+
+        self._log_file = open(log_path, "a")
+        print(f"StateLogger: logging to {log_path}")
+
+        while not self._stop_event.is_set():
+            now = datetime.now()
+            timestamp = now.strftime("%Y%m%d_%H%M%S") + f"_{now.microsecond:06d}"
+
+            with self.servo._lock:
+                servo_angle = round(self.servo.current_angle, 1)
+                servo_target = round(self.servo.target_angle, 1)
+
+            left_speed = 0.0
+            left_dir = 0
+            right_speed = 0.0
+            right_dir = 0
+            if self.tracks:
+                with self.tracks._lock:
+                    left_speed = self.tracks.left_speed
+                    left_dir = self.tracks.left_dir
+                    right_speed = self.tracks.right_speed
+                    right_dir = self.tracks.right_dir
+
+            entry = {
+                "timestamp": timestamp,
+                "servo_angle": servo_angle,
+                "servo_target": servo_target,
+                "left_speed": left_speed,
+                "left_dir": left_dir,
+                "right_speed": right_speed,
+                "right_dir": right_dir,
+            }
+            self._log_file.write(json.dumps(entry) + "\n")
+            self._log_file.flush()
+
+            self._stop_event.wait(self.SAMPLE_INTERVAL)
+
+        print("StateLogger: stopped")
 
 
 # API Models
@@ -226,6 +327,7 @@ class TrackRotateRequest(BaseModel):
 # Initialize controllers
 servo_controller = None
 track_controller = None
+state_logger = None
 
 # FastAPI app
 app = FastAPI(
@@ -237,7 +339,7 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """Initialize servo and track controllers on startup"""
-    global servo_controller, track_controller
+    global servo_controller, track_controller, state_logger
     try:
         servo_controller = ServoController(channel=0, address=0x42)
         servo_controller.start_movement_thread()
@@ -251,11 +353,15 @@ async def startup_event():
     except Exception as e:
         print(f"Failed to initialize track controller: {e}")
         print("Track endpoints will be unavailable")
+    state_logger = StateLogger(servo_controller, track_controller)
+    state_logger.start()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean shutdown"""
-    global servo_controller, track_controller
+    global servo_controller, track_controller, state_logger
+    if state_logger:
+        state_logger.stop()
     if track_controller:
         track_controller.stop()
         print("Track controller stopped")
