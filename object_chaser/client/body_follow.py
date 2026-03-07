@@ -29,6 +29,7 @@ BODY_ROTATE_DEADZONE = 8.0    # Stop body rotation when within this many degrees
 MIN_TRACK_SPEED = 0.03        # Minimum track speed for rotation
 MAX_TRACK_SPEED = 0.08        # Maximum track speed for rotation
 ROTATE_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (safety)
+MAX_ROTATE_DURATION = 15.0    # Max continuous rotation before forcing search mode
 
 # Forward movement parameters
 FORWARD_HEAD_THRESHOLD = 30.0  # Head must be within this many degrees of center to move forward
@@ -54,6 +55,7 @@ last_servo_update_time = None
 last_detection_time = None
 is_driving = False
 is_rotating = False
+rotation_start_time = None
 search_phase = -1              # -1 = not searching, 0..N = index in SEARCH_ANGLES, len = waiting
 search_phase_start_time = None
 search_command_sent = False
@@ -100,15 +102,32 @@ def update_head(new_goal):
 def rotate_body(servo_angle):
     """Rotate body continuously to bring head back toward center.
     Proportional speed based on deviation. Safety timeout refreshed each call."""
-    global is_rotating
+    global is_rotating, rotation_start_time, last_detection_time
     deviation = servo_angle - SERVO_CENTER  # positive = head looking left, negative = right
 
     if abs(deviation) < BODY_ROTATE_DEADZONE:
         if is_rotating:
             logger.info("Rotating: head near center, stopping rotation")
             is_rotating = False
+            rotation_start_time = None
             stop_body()
         return False
+
+    # Check rotation timeout — prevent infinite spinning
+    now = time.monotonic()
+    if is_rotating and rotation_start_time is not None:
+        if now - rotation_start_time > MAX_ROTATE_DURATION:
+            logger.warning("Rotation timeout: exceeded max duration, entering search mode")
+            stop_body()
+            # Center the servo
+            try:
+                requests.post(f"{servo_api_url}/move",
+                              json={"angle": SERVO_CENTER}, timeout=0.1)
+            except requests.exceptions.RequestException:
+                pass
+            # Force search mode on next iteration
+            last_detection_time = now - SEARCH_TIMEOUT - 1
+            return False
 
     # Proportional speed: larger deviation = faster rotation
     speed_factor = min(abs(deviation) / 90.0, 1.0)
@@ -123,6 +142,7 @@ def rotate_body(servo_angle):
     if not is_rotating:
         logger.info(f"Rotating: starting continuous body rotation")
         is_rotating = True
+        rotation_start_time = now
     logger.info(f"Rotating: deviation={deviation:.1f}, speed={track_speed:.3f}, dir={rotate_dir}")
 
     try:
@@ -247,11 +267,12 @@ def reset_search():
 
 def stop_body():
     """Stop all track movement"""
-    global is_driving, is_rotating
+    global is_driving, is_rotating, rotation_start_time
     if is_driving or is_rotating:
         logger.info("Tracks: stopped")
     is_driving = False
     is_rotating = False
+    rotation_start_time = None
     try:
         requests.post(f"{servo_api_url}/tracks/stop", timeout=0.5)
     except requests.exceptions.RequestException:
@@ -377,7 +398,8 @@ async def process_camera_feed(server_url, label='person'):
                                             stop_body()
                                             action = "too_close"
                                     else:
-                                        logger.warning("No valid depth data, skipping forward movement")
+                                        logger.warning("No valid depth data, stopping forward movement")
+                                        stop_body()
                                         action = "tracking"
                                 else:
                                     # Head too far off center — stop driving, rotate only

@@ -154,7 +154,7 @@ def _draw_servo(overlay, cx, cy, angle, target, cfg, color_cfg):
 
     # Tick marks at 0, 45, 90, 135, 180
     for tick_deg in [0, 45, 90, 135, 180]:
-        rad = math.radians(180 + tick_deg)  # map servo 0→right, 180→left
+        rad = math.radians(360 - tick_deg)  # map servo 0→right, 180→left
         x1 = int(cx + (radius - cfg["tick_length"]) * math.cos(rad))
         y1 = int(cy + (radius - cfg["tick_length"]) * math.sin(rad))
         x2 = int(cx + radius * math.cos(rad))
@@ -164,13 +164,13 @@ def _draw_servo(overlay, cx, cy, angle, target, cfg, color_cfg):
 
     # Target angle indicator (thin line)
     if target is not None:
-        tgt_rad = math.radians(180 + target)
+        tgt_rad = math.radians(360 - target)
         tx = int(cx + (needle_len - 4) * math.cos(tgt_rad))
         ty = int(cy + (needle_len - 4) * math.sin(tgt_rad))
         cv2.line(overlay, (cx, cy), (tx, ty), dim, 1, cv2.LINE_AA)
 
     # Needle (current angle)
-    needle_rad = math.radians(180 + angle)
+    needle_rad = math.radians(360 - angle)
     nx = int(cx + needle_len * math.cos(needle_rad))
     ny = int(cy + needle_len * math.sin(needle_rad))
 

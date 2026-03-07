@@ -80,3 +80,8 @@ CLI options:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/detect/` | POST | Send JPEG, get bounding boxes. Form field: `file` |
+
+### How to connect to mobile hotspot
+```
+sudo nmcli device wifi connect "YOUR_HOTSPOT_SSID" password "YOUR_PASSWORD"
+```
