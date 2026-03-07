@@ -7,6 +7,7 @@ import logging
 import aiohttp
 import cv2
 import numpy as np
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -19,199 +20,130 @@ logger.addHandler(console_handler)
 servo_api_url = 'http://localhost:8000'
 camera_server_url = 'http://localhost:8080'
 
-# Servo center angle - when head faces forward
+# Servo
 SERVO_CENTER = 90.0
 SERVO_RANGE = 180
+NORMAL_SERVO_SPEED = 120
+SEARCH_SERVO_SPEED = 15
 
-# Body rotation thresholds and parameters
-BODY_ROTATE_THRESHOLD = 20.0  # Start body rotation when head deviates this many degrees from center
-BODY_ROTATE_DEADZONE = 8.0    # Stop body rotation when within this many degrees of center
-MIN_TRACK_SPEED = 0.03        # Minimum track speed for rotation
-MAX_TRACK_SPEED = 0.08        # Maximum track speed for rotation
-ROTATE_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (safety)
-MAX_ROTATE_DURATION = 15.0    # Max continuous rotation before forcing search mode
+# Head tracking
+HEAD_OFFSET_THRESHOLD = 10    # Min camera offset (degrees) to trigger head movement
+SERVO_UPDATE_INTERVAL = 2.0   # Min seconds between servo updates
 
-# Forward movement parameters
-FORWARD_HEAD_THRESHOLD = 30.0  # Head must be within this many degrees of center to move forward
-FORWARD_SPEED = 0.20           # Base track speed when moving forward
-FORWARD_SAFETY_TIMEOUT = 2.0   # Auto-stop if no new command within this time (safety)
-STEERING_FACTOR = 0.6          # How much to steer based on object offset (0=none, 1=full)
+# Track movement
+SPEED_MAX = 0.10               # Max track speed (far from object)
+SPEED_MIN = 0.03               # Min track speed (near stop distance)
+STOP_DISTANCE = 0.8            # Stop when closer than this (meters)
+FAR_DISTANCE = 3.0             # Full speed when farther than this (meters)
+STEERING_GAIN = 1.0            # Steering aggressiveness from head deviation
+SAFETY_TIMEOUT = 2.0           # Auto-stop tracks if no new command
 
-# Depth / collision avoidance parameters
-STOP_DISTANCE = 0.8            # Stop moving forward when object is closer than this (meters)
-DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by this fraction on each side to avoid edge noise
+# Depth
+DEPTH_BBOX_SHRINK = 0.2
 
-# Head tracking parameters
-HEAD_OFFSET_THRESHOLD = 10    # Minimum camera offset (degrees) to trigger head movement
-SERVO_UPDATE_INTERVAL = 2.0   # Minimum seconds between servo updates
+# Search
+SEARCH_TIMEOUT = 2.0           # Seconds without detection before search sweep
 
-# Search mode parameters
-SEARCH_TIMEOUT = 2.0           # Start searching after this many seconds without detection
-SEARCH_SERVO_SPEED = 15        # Slow servo speed during search sweep (steps/sec)
-SEARCH_EDGE_DWELL = 2.0        # Seconds to pause at each edge before reversing
-NORMAL_SERVO_SPEED = 120       # Normal servo speed for tracking
+# Stale frame detection
+STALE_FRAME_SECONDS = 1.0      # Frame is stale if timestamp unchanged this long
 
+# ---- state ----
 last_servo_update_time = None
 last_detection_time = None
-is_driving = False
-is_rotating = False
-rotation_start_time = None
+prev_frame_ts = None
+prev_frame_ts_time = None
 search_active = False
 search_target = 0
-search_edge_time = None
-reacquire_angle = None
-reacquire_end_time = None
+tracks_moving = False
 
 
 def get_servo_status():
-    """Get current servo angle and status from API"""
     try:
-        response = requests.get(f"{servo_api_url}/status", timeout=0.1)
-        if response.status_code == 200:
-            return response.json()
+        r = requests.get(f"{servo_api_url}/status", timeout=0.1)
+        if r.status_code == 200:
+            return r.json()
     except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to get servo status: {e}")
+        logger.warning(f"Servo status failed: {e}")
     return None
 
 
-def update_head(new_goal):
-    """Move head servo to normalized position (0-1)"""
+def update_head(goal_angle):
+    """Move head servo to angle (0-180). Respects update interval."""
     global last_servo_update_time
-    if not 0 <= new_goal <= 1:
-        logger.warning(f"Goal {new_goal} out of range, clamping")
-        new_goal = max(0, min(1, new_goal))
-
+    goal_angle = max(0.0, min(float(SERVO_RANGE), goal_angle))
     now = time.monotonic()
     if last_servo_update_time is not None:
-        elapsed = now - last_servo_update_time
-        if elapsed < SERVO_UPDATE_INTERVAL:
-            logger.info(f"Skipping servo update; only {elapsed:.2f}s since last command")
+        if now - last_servo_update_time < SERVO_UPDATE_INTERVAL:
             return
-
-    target_angle = new_goal * SERVO_RANGE
     try:
-        response = requests.post(f"{servo_api_url}/move",
-                                 json={"angle": target_angle},
-                                 timeout=0.1)
-        if response.status_code != 200:
-            logger.warning(f"Servo API error: {response.status_code}")
+        requests.post(f"{servo_api_url}/move",
+                      json={"angle": goal_angle}, timeout=0.1)
         last_servo_update_time = now
     except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to update servo: {e}")
+        logger.warning(f"Servo move failed: {e}")
         last_servo_update_time = now
 
 
-def rotate_body(servo_angle):
-    """Rotate body continuously to bring head back toward center.
-    Proportional speed based on deviation. Safety timeout refreshed each call."""
-    global is_rotating, rotation_start_time, last_detection_time
-    deviation = servo_angle - SERVO_CENTER  # positive = head looking left, negative = right
+def stop_tracks():
+    global tracks_moving
+    if tracks_moving:
+        logger.info("Tracks: stopped")
+    tracks_moving = False
+    try:
+        requests.post(f"{servo_api_url}/tracks/stop", timeout=0.5)
+    except requests.exceptions.RequestException:
+        pass
 
-    if abs(deviation) < BODY_ROTATE_DEADZONE:
-        if is_rotating:
-            logger.info("Rotating: head near center, stopping rotation")
-            is_rotating = False
-            rotation_start_time = None
-            stop_body()
-        return False
 
-    # Check rotation timeout — prevent infinite spinning
-    now = time.monotonic()
-    if is_rotating and rotation_start_time is not None:
-        if now - rotation_start_time > MAX_ROTATE_DURATION:
-            logger.warning("Rotation timeout: exceeded max duration, entering search mode")
-            stop_body()
-            # Center the servo
-            try:
-                requests.post(f"{servo_api_url}/move",
-                              json={"angle": SERVO_CENTER}, timeout=0.1)
-            except requests.exceptions.RequestException:
-                pass
-            # Force search mode on next iteration
-            last_detection_time = now - SEARCH_TIMEOUT - 1
-            return False
+def drive(servo_angle, distance):
+    """Drive forward with differential steering. Speed scales with distance.
+    Returns action string."""
+    global tracks_moving
 
-    # Proportional speed: larger deviation = faster rotation
-    speed_factor = min(abs(deviation) / 90.0, 1.0)
-    track_speed = MIN_TRACK_SPEED + speed_factor * (MAX_TRACK_SPEED - MIN_TRACK_SPEED)
+    if distance is None:
+        stop_tracks()
+        return "no_depth"
 
-    # Direction: rotate body toward where the head is looking
-    if deviation > 0:
-        rotate_dir = 1  # rotate body left
-    else:
-        rotate_dir = 0  # rotate body right
+    if distance <= STOP_DISTANCE:
+        logger.info(f"Too close ({distance:.2f}m), stopping")
+        stop_tracks()
+        return "too_close"
 
-    if not is_rotating:
-        logger.info(f"Rotating: starting continuous body rotation")
-        is_rotating = True
-        rotation_start_time = now
-    logger.info(f"Rotating: deviation={deviation:.1f}, speed={track_speed:.3f}, dir={rotate_dir}")
+    # Speed: ramp from SPEED_MIN to SPEED_MAX based on distance
+    t = min(1.0, (distance - STOP_DISTANCE) / (FAR_DISTANCE - STOP_DISTANCE))
+    base_speed = SPEED_MIN + t * (SPEED_MAX - SPEED_MIN)
+
+    # Steering from head deviation
+    deviation = servo_angle - SERVO_CENTER  # positive = head left
+    steering = (deviation / 90.0) * STEERING_GAIN
+    left_speed = max(0.0, min(1.0, base_speed * (1 - steering)))
+    right_speed = max(0.0, min(1.0, base_speed * (1 + steering)))
+
+    if not tracks_moving:
+        logger.info("Driving forward")
+        tracks_moving = True
+    logger.info(f"Drive: L={left_speed:.3f} R={right_speed:.3f} "
+                f"dist={distance:.2f}m head={deviation:+.0f}°")
 
     try:
-        response = requests.post(f"{servo_api_url}/tracks/rotate",
-                                 json={"speed": track_speed,
-                                        "direction": rotate_dir,
-                                        "duration": ROTATE_SAFETY_TIMEOUT},
-                                 timeout=0.5)
-        if response.status_code != 200:
-            logger.warning(f"Track rotate error: {response.status_code}")
-            return False
+        requests.post(f"{servo_api_url}/tracks/move",
+                      json={"left_speed": left_speed, "left_dir": 0,
+                            "right_speed": right_speed, "right_dir": 1,
+                            "duration": SAFETY_TIMEOUT},
+                      timeout=0.5)
     except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to rotate body: {e}")
-        return False
+        logger.warning(f"Drive failed: {e}")
 
-    return True
-
-
-def drive_toward(x_normalized):
-    """Drive forward with differential steering based on object position.
-    x_normalized: 0=right, 1=left (inverted camera coords).
-    Refreshes safety timeout each call so tracks run continuously."""
-    global is_driving
-    # Steering: offset from center, positive = object is left
-    offset = x_normalized - 0.5  # range -0.5 to 0.5
-    steering = offset * STEERING_FACTOR
-
-    # Differential speed: slow the inner track to steer toward the object
-    # Object left (offset>0): slow left track → turn left
-    # Object right (offset<0): slow right track → turn right
-    left_speed = FORWARD_SPEED * (1 - steering)
-    right_speed = FORWARD_SPEED * (1 + steering)
-
-    # Clamp speeds to valid range
-    left_speed = max(0.01, min(1.0, left_speed))
-    right_speed = max(0.01, min(1.0, right_speed))
-
-    if not is_driving:
-        logger.info(f"Driving: starting continuous forward movement")
-        is_driving = True
-    logger.info(f"Driving: L={left_speed:.3f} R={right_speed:.3f} (offset={offset:+.2f})")
-
-    try:
-        # Forward: track0 dir=0, track1 dir=1 (from move.py)
-        # Safety timeout auto-stops if client crashes / stops sending
-        response = requests.post(f"{servo_api_url}/tracks/move",
-                                 json={"left_speed": left_speed,
-                                        "left_dir": 0,
-                                        "right_speed": right_speed,
-                                        "right_dir": 1,
-                                        "duration": FORWARD_SAFETY_TIMEOUT},
-                                 timeout=0.5)
-        if response.status_code != 200:
-            logger.warning(f"Drive error: {response.status_code}")
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to drive: {e}")
+    return "driving"
 
 
 def search_step():
-    """Smooth head sweep between 0° and 180° with dwell at edges."""
-    global search_active, search_target, search_edge_time
-
+    """Slow head sweep between 0 and 180. No pauses."""
+    global search_active, search_target
     if not search_active:
         search_active = True
         search_target = 0
-        search_edge_time = None
-        logger.info("Search mode: starting smooth sweep")
+        logger.info("Search: starting sweep")
         try:
             requests.post(f"{servo_api_url}/speed",
                           json={"steps_per_second": SEARCH_SERVO_SPEED}, timeout=0.1)
@@ -226,259 +158,179 @@ def search_step():
 
     status = get_servo_status()
     if status and status.get('status') == 'arrived':
-        now = time.monotonic()
-        if search_edge_time is None:
-            search_edge_time = now
-        elif now - search_edge_time >= SEARCH_EDGE_DWELL:
-            search_target = 180 if search_target == 0 else 0
-            search_edge_time = None
-            logger.info(f"Search mode: sweeping to {search_target}°")
-            try:
-                requests.post(f"{servo_api_url}/move",
-                              json={"angle": search_target}, timeout=0.1)
-            except requests.exceptions.RequestException:
-                pass
-    else:
-        search_edge_time = None
+        search_target = 180 if search_target == 0 else 0
+        logger.info(f"Search: sweeping to {search_target}°")
+        try:
+            requests.post(f"{servo_api_url}/move",
+                          json={"angle": search_target}, timeout=0.1)
+        except requests.exceptions.RequestException:
+            pass
 
 
 def reset_search():
-    """Reset search state. If found during search, start reacquire rotation."""
-    global search_active, search_target, search_edge_time, last_detection_time
-    global reacquire_angle, reacquire_end_time
+    global search_active, search_target, last_detection_time
     if search_active:
-        # Get head angle where object was found
-        status = get_servo_status()
-        found_angle = SERVO_CENTER
-        if status:
-            found_angle = status.get('current_position', SERVO_CENTER)
-        deviation = abs(found_angle - SERVO_CENTER)
-
-        logger.info(f"Search mode: object found at {found_angle:.0f}°")
-
-        # Restore normal servo speed
+        logger.info("Search: object found, resuming tracking")
         try:
             requests.post(f"{servo_api_url}/speed",
                           json={"steps_per_second": NORMAL_SERVO_SPEED}, timeout=0.1)
         except requests.exceptions.RequestException:
             pass
-
-        # Center the head
-        try:
-            requests.post(f"{servo_api_url}/move",
-                          json={"angle": SERVO_CENTER}, timeout=0.1)
-        except requests.exceptions.RequestException:
-            pass
-
-        # Rotate body to face the object if head was off-center
-        if deviation > BODY_ROTATE_DEADZONE:
-            reacquire_angle = found_angle
-            duration = max(2.0, deviation / 15.0)
-            reacquire_end_time = time.monotonic() + duration
-            logger.info(f"Reacquire: rotating body {duration:.1f}s to face object")
-
-        search_active = False
-        search_target = 0
-        search_edge_time = None
+    search_active = False
+    search_target = 0
     last_detection_time = time.monotonic()
 
 
-def stop_body():
-    """Stop all track movement"""
-    global is_driving, is_rotating, rotation_start_time
-    if is_driving or is_rotating:
-        logger.info("Tracks: stopped")
-    is_driving = False
-    is_rotating = False
-    rotation_start_time = None
-    try:
-        requests.post(f"{servo_api_url}/tracks/stop", timeout=0.5)
-    except requests.exceptions.RequestException:
-        pass
+def is_frame_stale(frame_ts):
+    """Detect stale frames (camera server returning same frame repeatedly)."""
+    global prev_frame_ts, prev_frame_ts_time
+    now = time.monotonic()
+    if frame_ts != prev_frame_ts:
+        prev_frame_ts = frame_ts
+        prev_frame_ts_time = now
+        return False
+    if prev_frame_ts_time is not None:
+        return (now - prev_frame_ts_time) > STALE_FRAME_SECONDS
+    return False
 
 
 async def process_camera_feed(server_url, label='person'):
-    print(f"Body follow mode: tracking label='{label}', depth enabled (Ctrl+C to stop)")
+    print(f"Body follow: tracking '{label}' (Ctrl+C to stop)")
     yolo_url = f"{server_url}/detect/"
     server_times = []
     start_time = time.time()
     request_count = 0
 
-    global last_detection_time, reacquire_angle, reacquire_end_time
+    global last_detection_time
     last_detection_time = time.monotonic()
 
-    # Get session info from camera server for JSONL logging
     try:
         session_resp = requests.get(f"{camera_server_url}/session", timeout=2.0)
         session_info = session_resp.json()
         yolo_dir = session_info['yolo_dir']
-        logger.info(f"Camera session: {session_info['session_path']}")
+        logger.info(f"Session: {session_info['session_path']}")
     except Exception as e:
         logger.error(f"Cannot connect to camera server: {e}")
-        logger.error("Make sure camera_server.py is running on localhost:8080")
         return 0, 0, []
 
     jsonl_path = f"{yolo_dir}/detections.jsonl"
     jsonl_file = open(jsonl_path, 'a')
-    logger.info(f"Logging detections to {jsonl_path}")
+    logger.info(f"Logging to {jsonl_path}")
 
     async with aiohttp.ClientSession() as session:
         try:
             while True:
-                # Fetch latest frame from camera server
+                # Fetch frame
                 async with session.get(f"{camera_server_url}/frame") as frame_resp:
                     if frame_resp.status != 200:
-                        logger.warning(f"Camera server error: {frame_resp.status}")
                         await asyncio.sleep(0.1)
                         continue
                     image_data = await frame_resp.read()
                     frame_timestamp = frame_resp.headers.get('X-Timestamp', '')
 
-                # Send JPEG to YOLO
+                # Skip stale frames
+                if is_frame_stale(frame_timestamp):
+                    logger.warning("Stale frame, skipping")
+                    await asyncio.sleep(0.1)
+                    continue
+
+                # YOLO detection
                 async with session.post(yolo_url, data={'file': image_data}) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        server_times.append(result['processing_time'])
+                    if response.status != 200:
+                        continue
 
-                        # Filter detections by label
-                        label_detections = [d for d in result['detections'] if d['label'] == label]
+                    result = await response.json()
+                    server_times.append(result['processing_time'])
+                    detections = [d for d in result['detections'] if d['label'] == label]
 
-                        action = "no_detection"
-                        target_bbox = None
-                        target_conf = None
-                        x_normalized = None
-                        distance = None
-                        servo_angle = None
+                    action = "no_detection"
+                    target_bbox = None
+                    target_conf = None
+                    x_normalized = None
+                    distance = None
+                    servo_angle = None
 
-                        if reacquire_angle is not None:
-                            # Reacquire: rotating body to face where object was found
-                            last_detection_time = time.monotonic()
-                            now = time.monotonic()
-                            if now < reacquire_end_time:
-                                rotate_body(reacquire_angle)
-                                action = "reacquiring"
-                            else:
-                                logger.info("Reacquire complete, resuming tracking")
-                                reacquire_angle = None
-                                reacquire_end_time = None
-                                stop_body()
+                    if detections:
+                        reset_search()
+                        best = max(detections, key=lambda d: d['confidence'])
+                        target_bbox = best['bbox']
+                        target_conf = best['confidence']
 
-                        elif label_detections:
-                            reset_search()
-                            if reacquire_angle is not None:
-                                # Just entered reacquire from search
-                                rotate_body(reacquire_angle)
-                                action = "reacquiring"
-                            else:
-                                # Normal tracking
-                                best = max(label_detections, key=lambda d: d['confidence'])
-                                target_bbox = best['bbox']
-                                target_conf = best['confidence']
+                        # Object position in frame
+                        img_array = np.frombuffer(image_data, dtype=np.uint8)
+                        color_image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                        img_width = color_image.shape[1]
+                        x_middle = best['bbox'][0] + best['bbox'][2] / 2
+                        x_normalized = 1 - (x_middle / img_width)
+                        logger.info(f"'{label}': conf={best['confidence']:.2f}, "
+                                    f"x={x_normalized:.2f}")
 
-                                img_array = np.frombuffer(image_data, dtype=np.uint8)
-                                color_image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-                                img_width = color_image.shape[1]
+                        # Head tracking
+                        status = get_servo_status()
+                        servo_angle = SERVO_CENTER
+                        if status:
+                            servo_angle = status.get('current_position', SERVO_CENTER)
+                            servo_status = status.get('status')
 
-                                x_middle = best['bbox'][0] + best['bbox'][2] / 2
-                                x_normalized = x_middle / img_width
-                                x_normalized = 1 - x_normalized  # Invert: 0=right, 1=left
-                                logger.info(f"Best '{label}': conf={best['confidence']:.2f}, x_norm={x_normalized:.2f}")
+                            fov = 87
+                            camera_offset = (x_normalized - 0.5) * fov
+                            if abs(camera_offset) > HEAD_OFFSET_THRESHOLD:
+                                goal = servo_angle + camera_offset
+                                goal = max(0, min(SERVO_RANGE, goal))
+                                if servo_status != 'moving':
+                                    update_head(goal)
 
-                                # --- Step 1: Head tracking ---
-                                status = get_servo_status()
-                                if status:
-                                    current_servo_angle = status.get('current_position', SERVO_CENTER)
-                                    servo_status = status.get('status')
-                                    servo_angle = current_servo_angle
-                                    logger.info(f"Servo: angle={current_servo_angle}, status={servo_status}")
+                        # Distance
+                        try:
+                            dist_resp = requests.post(
+                                f"{camera_server_url}/distance",
+                                json={"bbox": best['bbox'],
+                                      "shrink": DEPTH_BBOX_SHRINK},
+                                timeout=0.5)
+                            if dist_resp.status_code == 200:
+                                distance = dist_resp.json().get('distance')
+                        except requests.exceptions.RequestException:
+                            pass
 
-                                    fov = 87  # Realsense D435 horizontal FOV
-                                    camera_offset = (x_normalized - 0.5) * fov
+                        if distance is not None:
+                            logger.info(f"Distance: {distance:.2f}m")
 
-                                    if abs(camera_offset) > HEAD_OFFSET_THRESHOLD:
-                                        new_goal_angle = current_servo_angle + camera_offset
-                                        new_goal_angle = max(0, min(SERVO_RANGE, new_goal_angle))
-                                        new_goal = new_goal_angle / SERVO_RANGE
-
-                                        if servo_status != 'moving':
-                                            update_head(new_goal)
-
-                                    # --- Step 2 & 3: Body rotation + forward movement ---
-                                    head_deviation = abs(current_servo_angle - SERVO_CENTER)
-
-                                    # Rotate body to re-center head when needed
-                                    if head_deviation > BODY_ROTATE_DEADZONE:
-                                        rotate_body(current_servo_angle)
-                                        action = "rotating"
-
-                                    # Move forward unless severely off-center
-                                    if head_deviation < FORWARD_HEAD_THRESHOLD:
-                                        try:
-                                            dist_resp = requests.post(
-                                                f"{camera_server_url}/distance",
-                                                json={"bbox": best['bbox'], "shrink": DEPTH_BBOX_SHRINK},
-                                                timeout=0.5)
-                                            if dist_resp.status_code == 200:
-                                                distance = dist_resp.json().get('distance')
-                                        except requests.exceptions.RequestException as e:
-                                            logger.warning(f"Distance query failed: {e}")
-
-                                        if distance is not None:
-                                            logger.info(f"Distance to '{label}': {distance:.2f}m")
-                                            if distance > STOP_DISTANCE:
-                                                drive_toward(x_normalized)
-                                                action = "driving"
-                                            else:
-                                                logger.info(f"Too close ({distance:.2f}m < {STOP_DISTANCE}m), stopping")
-                                                stop_body()
-                                                action = "too_close"
-                                        else:
-                                            logger.warning("No valid depth data, stopping forward movement")
-                                            stop_body()
-                                            action = "tracking"
-                                    else:
-                                        if is_driving:
-                                            stop_body()
-                                        action = "rotating"
-
-                        else:
-                            # No detection — stop driving immediately
-                            if is_driving:
-                                stop_body()
-                            # Check if we should enter search mode
-                            now = time.monotonic()
-                            if last_detection_time is None:
-                                last_detection_time = now
-                            no_detect_duration = now - last_detection_time
-                            if no_detect_duration > SEARCH_TIMEOUT:
-                                search_step()
-                                action = "searching"
-                            else:
-                                logger.info(f"No '{label}' detected ({no_detect_duration:.1f}s)")
-
-                        # Log detection to JSONL
-                        log_entry = {
-                            "timestamp": frame_timestamp,
-                            "detections": result['detections'],
-                            "target_label": label,
-                            "target_bbox": target_bbox,
-                            "target_confidence": target_conf,
-                            "x_normalized": x_normalized,
-                            "distance": distance,
-                            "servo_angle": servo_angle,
-                            "action": action,
-                        }
-                        jsonl_file.write(json.dumps(log_entry) + "\n")
-                        jsonl_file.flush()
+                        # Drive with steering
+                        action = drive(servo_angle, distance)
 
                     else:
-                        print(f"Error: {response.status}, {await response.text()}")
+                        # No detection
+                        stop_tracks()
+                        now = time.monotonic()
+                        if last_detection_time is None:
+                            last_detection_time = now
+                        elapsed = now - last_detection_time
+                        if elapsed > SEARCH_TIMEOUT:
+                            search_step()
+                            action = "searching"
+                        else:
+                            logger.info(f"No '{label}' ({elapsed:.1f}s)")
+
+                    # Log to JSONL
+                    log_entry = {
+                        "timestamp": frame_timestamp,
+                        "detections": result['detections'],
+                        "target_label": label,
+                        "target_bbox": target_bbox,
+                        "target_confidence": target_conf,
+                        "x_normalized": x_normalized,
+                        "distance": distance,
+                        "servo_angle": servo_angle,
+                        "action": action,
+                    }
+                    jsonl_file.write(json.dumps(log_entry) + "\n")
+                    jsonl_file.flush()
 
                 request_count += 1
 
         except KeyboardInterrupt:
-            print("\nInterrupted by user.")
-            stop_body()
+            print("\nStopped.")
+            stop_tracks()
         finally:
             jsonl_file.close()
 
@@ -488,50 +340,39 @@ async def process_camera_feed(server_url, label='person'):
 
 
 async def main():
-    parser = argparse.ArgumentParser(description='Body follow - head tracking + body rotation')
-    parser.add_argument('--label', type=str, default='person', help='YOLO label to track (default: person)')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--label', default='person')
     args = parser.parse_args()
 
-    server_url = 'http://localhost:8765'
-
-    logger.info("Initializing servo via API")
+    logger.info("Initializing servo")
     try:
-        response = requests.post(f"{servo_api_url}/move",
-                                 json={"angle": SERVO_CENTER},
-                                 timeout=2.0)
-        if response.status_code == 200:
-            logger.info("Servo initialized to center position")
+        r = requests.post(f"{servo_api_url}/move",
+                          json={"angle": SERVO_CENTER}, timeout=2.0)
+        if r.status_code == 200:
+            logger.info("Servo centered")
         else:
-            logger.error(f"Failed to initialize servo: {response.status_code}")
+            logger.error(f"Servo init failed: {r.status_code}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Cannot connect to servo API: {e}")
-        logger.error("Make sure servo_api.py is running on localhost:8000")
         return
 
-    # Set servo speed
     try:
         requests.post(f"{servo_api_url}/speed",
-                       json={"steps_per_second": NORMAL_SERVO_SPEED},
-                       timeout=0.5)
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Error setting servo speed: {e}")
+                      json={"steps_per_second": NORMAL_SERVO_SPEED}, timeout=0.5)
+    except requests.exceptions.RequestException:
+        pass
 
     try:
-        logger.info(f"Starting body follow, tracking '{args.label}'")
-        fps, total_time, server_times = await process_camera_feed(
-            server_url,
-            label=args.label,
-        )
-        logger.info(f"Total time: {total_time:.2f}s, Average FPS: {fps:.2f}")
+        logger.info(f"Tracking '{args.label}'")
+        await process_camera_feed('http://localhost:8765', label=args.label)
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error: {e}")
     finally:
-        stop_body()
+        stop_tracks()
         try:
             requests.post(f"{servo_api_url}/stop", timeout=1.0)
-            logger.info("Servo stopped")
         except requests.exceptions.RequestException:
-            logger.warning("Could not stop servo via API")
+            pass
         await asyncio.sleep(0.1)
 
 
