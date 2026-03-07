@@ -67,7 +67,7 @@ class CameraManager:
         self.latest_timestamp: str = ""
         self.depth_scale: float = 0.0
         self.frame_count: int = 0
-        self.saving_active: bool = True
+        self.saving_active: bool = False
         self.capture_fps: float = 0.0
 
         # Write queue
@@ -331,6 +331,20 @@ async def get_status():
             "saving_active": camera_manager.saving_active,
             "depth_scale": camera_manager.depth_scale,
         }
+
+
+@app.post("/start-saving")
+async def start_saving():
+    if not camera_manager:
+        raise HTTPException(status_code=500, detail="Camera not initialized")
+
+    with camera_manager._lock:
+        if camera_manager.saving_active:
+            return {"message": "already saving", "frame_count": camera_manager.frame_count}
+        camera_manager.saving_active = True
+
+    print("Saving activated via /start-saving")
+    return {"message": "saving started", "frame_limit": camera_manager.frame_limit}
 
 
 if __name__ == "__main__":

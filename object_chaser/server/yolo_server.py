@@ -119,6 +119,21 @@ def startup_event():
     class_list = load_classes()
     logger.info(f"Model loaded in {time.time() - start_time:.2f} seconds")
 
+_warmed_up = False
+
+@app.route('/ready', methods=['GET'])
+def ready_endpoint():
+    """Returns 200 once YOLO has completed a warmup inference."""
+    global _warmed_up, net
+    if not _warmed_up:
+        logger.info("Warmup inference starting...")
+        dummy = np.zeros((640, 640, 3), dtype=np.uint8)
+        start = time.time()
+        detect(dummy, net)
+        logger.info(f"Warmup inference done in {time.time() - start:.2f}s")
+        _warmed_up = True
+    return jsonify({"ready": True})
+
 @app.route('/test', methods=['GET'])
 def test_endpoint():
     return jsonify({"message": "YOLO API is working!"})
