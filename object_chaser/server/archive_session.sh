@@ -15,7 +15,7 @@ fi
 if [ -n "$1" ]; then
     SESSION="$1"
 else
-    SESSION="$(ls -1t "$SESSIONS_DIR" | head -1)"
+    SESSION="$(ls -1t "$SESSIONS_DIR" | grep -v '\.tar\.gz$' | head -1)"
 fi
 
 if [ -z "$SESSION" ] || [ ! -d "$SESSIONS_DIR/$SESSION" ]; then
@@ -24,6 +24,11 @@ if [ -z "$SESSION" ] || [ ! -d "$SESSIONS_DIR/$SESSION" ]; then
 fi
 
 ARCHIVE="$SESSIONS_DIR/${SESSION}.tar.gz"
+
+if [ -f "$ARCHIVE" ]; then
+    echo "Archive already exists: $ARCHIVE ($(du -sh "$ARCHIVE" | cut -f1))"
+    exit 0
+fi
 
 echo "Archiving: $SESSIONS_DIR/$SESSION"
 echo "Files: $(find "$SESSIONS_DIR/$SESSION" -type f | wc -l)"
