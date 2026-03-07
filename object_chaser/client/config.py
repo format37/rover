@@ -42,6 +42,3 @@ SAFETY_TIMEOUT = 2.0           # Tracks auto-stop if no new command
 SERVO_API_URL = 'http://localhost:8000'
 CAMERA_SERVER_URL = 'http://localhost:8080'
 YOLO_URL = 'http://localhost:8765'
-
-# Frame staleness
-STALE_FRAME_SECONDS = 2.0

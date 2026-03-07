@@ -8,7 +8,7 @@ import aiohttp
 import cv2
 import numpy as np
 import chase
-from config import (CAMERA_SERVER_URL, YOLO_URL, STALE_FRAME_SECONDS,
+from config import (CAMERA_SERVER_URL, YOLO_URL,
                      DETECTION_CONFIDENCE_MIN)
 
 logger = logging.getLogger(__name__)
@@ -19,21 +19,6 @@ handler.setFormatter(logging.Formatter(
 logger.addHandler(handler)
 logging.getLogger('chase').setLevel(logging.INFO)
 logging.getLogger('chase').addHandler(handler)
-
-_prev_ts = None
-_prev_ts_time = None
-
-
-def is_frame_stale(ts):
-    global _prev_ts, _prev_ts_time
-    now = time.monotonic()
-    if ts != _prev_ts:
-        _prev_ts = ts
-        _prev_ts_time = now
-        return False
-    if _prev_ts_time is not None:
-        return (now - _prev_ts_time) > STALE_FRAME_SECONDS
-    return False
 
 
 async def run(label='person'):
@@ -64,11 +49,7 @@ async def run(label='person'):
                     image_data = await resp.read()
                     frame_ts = resp.headers.get('X-Timestamp', '')
 
-                if is_frame_stale(frame_ts):
-                    await asyncio.sleep(0.1)
-                    continue
-
-                # YOLO
+# YOLO
                 async with session.post(
                         f"{YOLO_URL}/detect/",
                         data={'file': image_data}) as resp:
