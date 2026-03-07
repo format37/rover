@@ -23,9 +23,8 @@ The active system is **object_chaser/** with a 4-process architecture:
 - `servo_api.py` — ServoController (smooth threaded movement) + TrackController (PCA9685 tank tracks). All movement has safety auto-stop timeouts.
 
 **Client** (`object_chaser/client/`):
-- `client.py` — Head-only tracking (servo follows detected object, fetches frames from camera server)
 - `body_follow.py` — Full autonomous behavior: fetches frames from camera server, head tracking → body rotation → forward driving with differential steering → depth-based collision avoidance → search mode when target lost. Logs detections to `yolo/detections.jsonl` in the session folder.
-- `camera_controls.py` — RealSense async wrapper with optional depth alignment and filtering (used by client.py only)
+- `camera_controls.py` — RealSense async wrapper (legacy, kept for reference)
 
 **Track directions** (from `object_chaser/examples/move.py`):
 - Forward: track0 dir=0, track1 dir=1
@@ -48,10 +47,9 @@ python3.6 yolo_server.py
 cd ~/projects/rover/object_chaser/server/
 python3.8 servo_api.py
 
-# Terminal 4: Client (pick one)
+# Terminal 4: Client
 cd ~/projects/rover/object_chaser/client/
-python3.8 client.py --label person           # head tracking only
-python3.8 body_follow.py --label person      # full body follow
+python3.8 body_follow.py --label person
 ```
 
 ## Key behavior parameters (body_follow.py)
@@ -68,7 +66,7 @@ All tunable constants are at the top of the file. Key ones:
 
 - `rover.py`, `start.py`, `head.py` — older monolithic approach with MiniGPT-4 LLM agent (uses `settings.json` and `prompt.txt`)
 - `langchain/` — experimental LLM integration
-- `archive/` — deprecated implementations, useful as hardware reference (e.g., `rsmove.py` for depth-based movement, `move.py` for raw track control)
+- `archive/` — deprecated implementations, useful as hardware reference (e.g., `client.py` for head-only tracking, `rsmove.py` for depth-based movement, `move.py` for raw track control)
 - `tests/` — audio recording/playback tests
 
 ## Development notes

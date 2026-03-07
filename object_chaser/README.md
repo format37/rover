@@ -46,17 +46,7 @@ python3.8 servo_api.py
 ```
 Hardcoded port: 8000. No CLI options.
 
-### Terminal 4: Client (pick one)
-
-**Head tracking only** (uses camera server for frames):
-```
-cd ~/projects/rover/object_chaser/client/
-python3.8 client.py --label person
-```
-CLI options:
-- `--label person` — YOLO label to track (default: person)
-
-**Body follow** (uses camera server for frames and depth):
+### Terminal 4: Client
 ```
 cd ~/projects/rover/object_chaser/client/
 python3.8 body_follow.py --label person

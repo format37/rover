@@ -39,7 +39,7 @@ class CameraManager:
                  depth_interval: int = 3, frame_limit: Optional[int] = None):
         self.jpeg_quality = jpeg_quality
         self.depth_save_interval = depth_interval
-        self.session_base = Path(session_dir)
+        self.session_base = Path(session_dir).resolve()
 
         # Create session folder
         self.session_start = datetime.now()
