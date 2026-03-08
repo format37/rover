@@ -257,8 +257,8 @@ def _do_tracking(detection, x_normalized):
     logger.info(f"Track: L={left_speed:.3f} R={right_speed:.3f} "
                 f"dist={distance:.2f}m")
 
-    # Forward: left_dir=0, right_dir=1
-    _send_tracks(left_speed, 0, right_speed, 1)
+    # Forward: left_dir=1, right_dir=1
+    _send_tracks(left_speed, 1, right_speed, 1)
 
     return _result("driving", servo_angle=servo_angle, distance=distance)
 
