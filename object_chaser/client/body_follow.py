@@ -61,6 +61,11 @@ async def run(label='person'):
                               if d['label'] == label
                               and d['confidence'] >= DETECTION_CONFIDENCE_MIN]
 
+                # Tell camera server whether to save depth
+                await session.post(
+                    f"{CAMERA_SERVER_URL}/depth-saving",
+                    params={"enabled": "true" if detections else "false"})
+
                 if detections:
                     best = max(detections, key=lambda d: d['confidence'])
                     arr = np.frombuffer(image_data, dtype=np.uint8)

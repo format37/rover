@@ -36,9 +36,9 @@ class DistanceRequest(BaseModel):
 
 class CameraManager:
     def __init__(self, session_dir: str = "sessions", jpeg_quality: int = 95,
-                 depth_interval: int = 3, frame_limit: Optional[int] = None):
+                 frame_limit: Optional[int] = None):
         self.jpeg_quality = jpeg_quality
-        self.depth_save_interval = depth_interval
+        self.depth_saving_enabled: bool = False
         self.session_base = Path(session_dir).resolve()
 
         # Create session folder
@@ -105,7 +105,7 @@ class CameraManager:
         self.session_base.mkdir(parents=True, exist_ok=True)
         available = shutil.disk_usage(self.session_base).free
         budget = available - DISK_HEADROOM
-        est_frame_size = ESTIMATED_RGB_SIZE + ESTIMATED_DEPTH_SIZE / self.depth_save_interval
+        est_frame_size = ESTIMATED_RGB_SIZE + ESTIMATED_DEPTH_SIZE / 3
         return max(100, int(budget / est_frame_size))
 
     def _make_timestamp(self) -> str:
@@ -165,8 +165,7 @@ class CameraManager:
 
             # Enqueue for saving
             if saving:
-                # Depth every Nth frame
-                depth_to_save = depth_image if (count % self.depth_save_interval == 0) else None
+                depth_to_save = depth_image if self.depth_saving_enabled else None
                 try:
                     self._write_queue.put_nowait((timestamp, jpeg_bytes, depth_to_save))
                 except queue.Full:
@@ -293,7 +292,6 @@ async def lifespan(app):
     camera_manager = CameraManager(
         session_dir=cli_args.session_dir,
         jpeg_quality=cli_args.jpeg_quality,
-        depth_interval=cli_args.depth_interval,
         frame_limit=cli_args.frame_limit,
     )
     yield
@@ -390,11 +388,18 @@ async def start_saving():
     return {"message": "saving started", "frame_limit": camera_manager.frame_limit}
 
 
+@app.post("/depth-saving")
+async def set_depth_saving(enabled: bool):
+    if not camera_manager:
+        raise HTTPException(status_code=500, detail="Camera not initialized")
+
+    camera_manager.depth_saving_enabled = enabled
+    return {"depth_saving": enabled}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RealSense camera server")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--depth-interval", type=int, default=3,
-                        help="Save depth every Nth frame")
     parser.add_argument("--session-dir", type=str, default="sessions",
                         help="Base directory for session folders")
     parser.add_argument("--jpeg-quality", type=int, default=95)
