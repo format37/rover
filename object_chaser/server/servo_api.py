@@ -200,7 +200,7 @@ class TrackController:
             if self._stop_timer is not None:
                 self._stop_timer.cancel()
                 self._stop_timer = None
-            right_dir = 0 if right_dir else 1 # Invert right track direction to match physical setup
+            left_dir = 0 if left_dir else 1 # Invert left track direction to match physical setup
             self._set_track(0, right_speed, right_dir)
             self._set_track(1, left_speed, left_dir)
             track_logger.info(f"TrackController.Move: left_speed={left_speed:.3f} dir={left_dir}  "
