@@ -9,13 +9,13 @@ CAMERA_FOV = 87 # RGB: 87° × 58°
 # Depth: 69° × 42°
 
 # Detection
-DETECTION_CONFIDENCE_MIN = 0.6 # Ignore detections below this confidence
+DETECTION_CONFIDENCE_MIN = 0.7 # Ignore detections below this confidence
 
 # Tracking thresholds
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
-SPEED_MAX = 0.15               # Max track speed
+SPEED_MAX = 0.20               # Max track speed
 SPEED_MIN = 0.03               # Min track speed
 
 # Steering
