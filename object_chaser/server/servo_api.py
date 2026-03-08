@@ -343,12 +343,12 @@ class TrackMoveRequest(BaseModel):
     left_dir: int = Field(..., ge=0, le=1, description="Left track direction (0 or 1)")
     right_speed: float = Field(..., ge=0, le=1, description="Right track speed 0-1")
     right_dir: int = Field(..., ge=0, le=1, description="Right track direction (0 or 1)")
-    duration: float = Field(0, ge=0, le=10, description="Auto-stop after seconds (0=manual stop)")
+    duration: float = Field(0, ge=0, le=30, description="Auto-stop after seconds (0=manual stop)")
 
 class TrackRotateRequest(BaseModel):
     speed: float = Field(..., ge=0, le=1, description="Rotation speed 0-1")
     direction: int = Field(..., ge=0, le=1, description="Rotation direction: 0=right, 1=left")
-    duration: float = Field(0, ge=0, le=10, description="Auto-stop after seconds (0=manual stop)")
+    duration: float = Field(0, ge=0, le=30, description="Auto-stop after seconds (0=manual stop)")
 
 # Initialize controllers
 servo_controller = None
