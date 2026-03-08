@@ -247,8 +247,8 @@ def _do_tracking(detection, x_normalized):
 
     # Differential steering from x_normalized
     steering = (x_normalized - 0.5) * STEERING_GAIN
-    left_speed = base_speed * (1 + steering)
-    right_speed = base_speed * (1 - steering)
+    left_speed = base_speed * (1 - steering)
+    right_speed = base_speed * (1 + steering)
     left_speed = max(0.0, min(SPEED_MAX, left_speed))
     right_speed = max(0.0, min(SPEED_MAX, right_speed))
 
