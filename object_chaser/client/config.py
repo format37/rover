@@ -9,13 +9,13 @@ CAMERA_FOV = 87 # RGB: 87° × 58°
 # Depth: 69° × 42°
 
 # Detection
-DETECTION_CONFIDENCE_MIN = 0.7 # Ignore detections below this confidence
+DETECTION_CONFIDENCE_MIN = 0.8 # Ignore detections below this confidence
 
 # Tracking thresholds
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
-SPEED_MAX = 0.60               # Max track speed
+SPEED_MAX = 0.80               # Max track speed
 SPEED_MIN = 0.03               # Min track speed
 
 # Steering
@@ -30,7 +30,9 @@ ROTATION_DEG_PER_SEC = 15.0    # Degrees of body rotation per second at ROTATION
 
 # Search
 SEARCH_TIMEOUT = 2.0           # Seconds without detection -> start search
-SEARCH_SWEEPS_BEFORE_TURN = 2 # Full sweeps before 180 deg body turn
+SEARCH_SWEEPS_BEFORE_TURN = 2  # Full sweeps before body pivot
+SEARCH_PIVOT_ANGLE = 180        # Degrees to rotate body after sweep limit
+TRACK_MAX_DURATION = 30.0      # Max allowed duration for a single track command (seconds)
 
 # Depth
 DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by 20% per side before sampling depth

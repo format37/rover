@@ -25,7 +25,7 @@ from config import (
     FORWARD_HEAD_THRESHOLD, STOP_DISTANCE, FAR_DISTANCE,
     SPEED_MAX, SPEED_MIN, STEERING_GAIN, DECEL_STEP,
     ROTATION_SPEED, ROTATION_DEG_PER_SEC,
-    SEARCH_TIMEOUT, SEARCH_SWEEPS_BEFORE_TURN,
+    SEARCH_TIMEOUT, SEARCH_SWEEPS_BEFORE_TURN, SEARCH_PIVOT_ANGLE,
     DEPTH_BBOX_SHRINK, SAFETY_TIMEOUT,
 )
 
@@ -326,13 +326,13 @@ def _do_searching(detection, x_normalized):
         _search_target = 180 if _search_target == 0 else 0
         logger.info(f"Search: sweep {_search_sweeps // 2}, heading to {_search_target}deg")
 
-        # After enough full sweeps (2 half-sweeps = 1 full), pivot body
+        # After enough full sweeps (2 half-sweeps = 1 full), pivot body clockwise
         if _search_sweeps >= SEARCH_SWEEPS_BEFORE_TURN * 2:
-            logger.info("Search: pivoting body 180deg")
-            duration = 180.0 / ROTATION_DEG_PER_SEC
+            duration = SEARCH_PIVOT_ANGLE / ROTATION_DEG_PER_SEC
+            logger.info(f"Search: pivoting body {SEARCH_PIVOT_ANGLE}deg CW, "
+                        f"dur={duration:.1f}s")
             _send_rotate(ROTATION_SPEED, 0, duration)
             _search_sweeps = 0
-            # Continue searching after pivot (tracks auto-stop via duration)
 
         _send_servo(_search_target)
 

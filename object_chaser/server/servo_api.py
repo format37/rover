@@ -17,6 +17,9 @@ import busio
 from adafruit_pca9685 import PCA9685
 import requests as http_requests
 import uvicorn
+import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent / 'client'))
+from config import TRACK_MAX_DURATION
 
 class ServoController:
     def __init__(self, channel: int = 0, address: int = 0x42):
@@ -343,12 +346,12 @@ class TrackMoveRequest(BaseModel):
     left_dir: int = Field(..., ge=0, le=1, description="Left track direction (0 or 1)")
     right_speed: float = Field(..., ge=0, le=1, description="Right track speed 0-1")
     right_dir: int = Field(..., ge=0, le=1, description="Right track direction (0 or 1)")
-    duration: float = Field(0, ge=0, le=30, description="Auto-stop after seconds (0=manual stop)")
+    duration: float = Field(0, ge=0, le=TRACK_MAX_DURATION, description="Auto-stop after seconds (0=manual stop)")
 
 class TrackRotateRequest(BaseModel):
     speed: float = Field(..., ge=0, le=1, description="Rotation speed 0-1")
     direction: int = Field(..., ge=0, le=1, description="Rotation direction: 0=right, 1=left")
-    duration: float = Field(0, ge=0, le=30, description="Auto-stop after seconds (0=manual stop)")
+    duration: float = Field(0, ge=0, le=TRACK_MAX_DURATION, description="Auto-stop after seconds (0=manual stop)")
 
 # Initialize controllers
 servo_controller = None
