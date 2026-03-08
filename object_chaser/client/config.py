@@ -3,7 +3,7 @@
 # Servo
 SERVO_CENTER = 90.0
 SERVO_RANGE = 180
-NORMAL_SERVO_SPEED = 120
+NORMAL_SERVO_SPEED = 60
 SEARCH_SERVO_SPEED = 15
 CAMERA_FOV = 87 # RGB: 87° × 58°
 # Depth: 69° × 42°
@@ -15,7 +15,7 @@ DETECTION_CONFIDENCE_MIN = 0.0 # Ignore detections below this confidence
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
-SPEED_MAX = 0.90               # Max track speed
+SPEED_MAX = 0.70               # Max track speed
 SPEED_MIN = 0.03               # Min track speed
 
 # Steering

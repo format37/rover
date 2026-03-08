@@ -24,8 +24,8 @@ import uvicorn
 
 
 # Estimates for frame limit computation
-ESTIMATED_RGB_SIZE = 250_000       # ~250KB per JPEG at quality 95
-ESTIMATED_DEPTH_SIZE = 1_800_000   # ~1.8MB per .npy (1280x720 uint16)
+ESTIMATED_RGB_SIZE = 600_000       # ~600KB per JPEG at quality 95
+ESTIMATED_DEPTH_SIZE = 1_012_600   # ~1.0MB per .npy (1280x720 uint16)
 DISK_HEADROOM = 500_000_000        # Reserve 500MB free
 
 

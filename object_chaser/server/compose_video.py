@@ -472,8 +472,6 @@ def main():
                         help="Max seconds to reuse a depth frame (default: 2.0)")
     parser.add_argument("--max-yolo-gap", type=float, default=3.0,
                         help="Max seconds to reuse a YOLO detection (default: 3.0)")
-    parser.add_argument("--label", type=str, default="person",
-                        help="Only show this detection label (empty=all)")
     parser.add_argument("--frame", type=str, default=None,
                         help="Render single frame from this depth file (saves PNG)")
     parser.add_argument("--workers", type=int, default=0,
@@ -561,8 +559,9 @@ def main():
         yolo_entry = yolo_entries[yolo_idx][1] if yolo_idx >= 0 else {}
         detections = _enrich_detections(yolo_entry)
         yolo_ts = yolo_entry.get("timestamp", "")
-        if args.label:
-            detections = [d for d in detections if d.get("label") == args.label]
+        target_label = yolo_entry.get("target_label")
+        if target_label:
+            detections = [d for d in detections if d.get("label") == target_label]
 
         servo_state = None
         servo_ts = ""
@@ -690,8 +689,9 @@ def main():
         yolo_entry = yolo_entries[yolo_idx][1] if yolo_idx >= 0 else {}
         detections = _enrich_detections(yolo_entry)
         yolo_ts = yolo_entry.get("timestamp", "")
-        if args.label:
-            detections = [d for d in detections if d.get("label") == args.label]
+        target_label = yolo_entry.get("target_label")
+        if target_label:
+            detections = [d for d in detections if d.get("label") == target_label]
 
         servo_state = None
         servo_ts = ""
