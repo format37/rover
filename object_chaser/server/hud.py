@@ -213,13 +213,11 @@ def draw_hud(frame: np.ndarray, servo_state: dict, cfg: dict) -> np.ndarray:
     gap = cfg["gap"]
     my = cfg["margin_y"]
 
-    # Compute signed velocities
-    # Left track (index 0): forward when dir=0
+    # Compute signed velocities (dir: 1=forward, 0=backward for both tracks)
     ls = servo_state.get("left_speed", 0)
     ld = servo_state.get("left_dir", 0)
-    left_vel = ls if ld == 0 else -ls
+    left_vel = ls if ld == 1 else -ls
 
-    # Right track (index 1): forward when dir=1
     rs = servo_state.get("right_speed", 0)
     rd = servo_state.get("right_dir", 0)
     right_vel = rs if rd == 1 else -rs

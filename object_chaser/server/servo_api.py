@@ -189,20 +189,24 @@ class TrackController:
             self.pca[track].channels[0].duty_cycle = 0  # stop
 
     def move(
-            self, 
-            left_speed: float, 
-            left_dir: int, 
-            right_speed: float, 
-            right_dir: int, 
+            self,
+            left_speed: float,
+            left_dir: int,
+            right_speed: float,
+            right_dir: int,
             duration: float = 0):
-        """Track movement function"""
+        """Track movement function.
+
+        Directions use native convention: 1=forward, 0=backward for both tracks.
+        Left track hardware direction is inverted internally (mirrored on chassis).
+        """
         with self._lock:
             if self._stop_timer is not None:
                 self._stop_timer.cancel()
                 self._stop_timer = None
-            left_dir = 0 if left_dir else 1 # Invert left track direction to match physical setup
-            self._set_track(0, right_speed, right_dir)
-            self._set_track(1, left_speed, left_dir)
+            hw_left_dir = 0 if left_dir else 1  # Invert left track: mirrored on chassis
+            self._set_track(0, left_speed, hw_left_dir)   # pca[0] = 0x40 = left
+            self._set_track(1, right_speed, right_dir)     # pca[1] = 0x41 = right
             track_logger.info(f"TrackController.Move: left_speed={left_speed:.3f} dir={left_dir}  "
                               f"right_speed={right_speed:.3f} dir={right_dir}")
             self.left_speed = left_speed
@@ -214,9 +218,12 @@ class TrackController:
             self._stop_timer.start()
 
     def rotate(self, speed: float, direction: int, duration: float = 0):
-        """Rotate body in place. direction: 0=right, 1=left."""
-        # Both tracks same direction = pivot turn
-        self.move(speed, direction, speed, -direction, duration)
+        """Rotate body in place. direction: 0=right, 1=left.
+
+        Right: left forward (1) + right backward (0).
+        Left:  left backward (0) + right forward (1).
+        """
+        self.move(speed, 1 - direction, speed, direction, duration)
 
     def stop(self):
         with self._lock:

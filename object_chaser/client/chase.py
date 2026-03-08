@@ -284,7 +284,7 @@ def _do_lost(detection, x_normalized):
     if _current_speed > 0:
         _current_speed = max(0.0, _current_speed - DECEL_STEP)
         if _current_speed > 0:
-            _send_tracks(_current_speed, 0, _current_speed, 1)
+            _send_tracks(_current_speed, 1, _current_speed, 1)
         else:
             _stop_tracks()
     else:
