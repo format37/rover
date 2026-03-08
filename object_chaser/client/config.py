@@ -25,7 +25,7 @@ STEERING_GAIN = 1.0            # How aggressively tracks steer from x_normalized
 DECEL_STEP = 0.02              # Speed reduction per frame when losing object
 
 # Body rotation (time-based)
-ROTATION_SPEED = 0.1          # Track speed during pivot
+ROTATION_SPEED = 0.08          # Track speed during pivot
 ROTATION_DEG_PER_SEC = 15.0    # Degrees of body rotation per second at ROTATION_SPEED
 
 # Search
@@ -33,7 +33,7 @@ SEARCH_TIMEOUT = 2.0           # Seconds without detection -> start search
 SEARCH_SWEEPS_BEFORE_TURN = 10 # Full sweeps before 180 deg body turn
 
 # Depth
-DEPTH_BBOX_SHRINK = 0.2
+DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by 20% per side before sampling depth
 
 # Safety
 SAFETY_TIMEOUT = 2.0           # Tracks auto-stop if no new command
