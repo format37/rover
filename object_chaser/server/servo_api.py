@@ -188,19 +188,23 @@ class TrackController:
         else:
             self.pca[track].channels[0].duty_cycle = 0  # stop
 
-    def move(self, left_speed: float, left_dir: int, right_speed: float, right_dir: int, duration: float = 0):
-        """Move both tracks. If duration > 0, auto-stop after duration seconds.
-        Physical mapping: pca[0]=0x40 is RIGHT track, pca[1]=0x41 is LEFT track.
-        Direction convention: left_dir uses track-0 convention, right_dir uses track-1."""
+    def move(
+            self, 
+            left_speed: float, 
+            left_dir: int, 
+            right_speed: float, 
+            right_dir: int, 
+            duration: float = 0):
+        """Track movement function"""
         with self._lock:
             if self._stop_timer is not None:
                 self._stop_timer.cancel()
                 self._stop_timer = None
-            self._set_track(0, right_speed, left_dir)
-            self._set_track(1, left_speed, right_dir)
-            track_logger.info(f"HW move: pca0(0x40)={right_speed:.3f} dir={left_dir}  "
-                              f"pca1(0x41)={left_speed:.3f} dir={right_dir}  "
-                              f"(logical L={left_speed:.3f} R={right_speed:.3f})")
+            right_dir = 0 if right_dir else 1 # Invert right track direction to match physical setup
+            self._set_track(0, right_speed, right_dir)
+            self._set_track(1, left_speed, left_dir)
+            track_logger.info(f"TrackController.Move: left_speed={left_speed:.3f} dir={left_dir}  "
+                              f"right_speed={right_speed:.3f} dir={right_dir}")
             self.left_speed = left_speed
             self.left_dir = left_dir
             self.right_speed = right_speed
@@ -212,7 +216,7 @@ class TrackController:
     def rotate(self, speed: float, direction: int, duration: float = 0):
         """Rotate body in place. direction: 0=right, 1=left."""
         # Both tracks same direction = pivot turn
-        self.move(speed, direction, speed, direction, duration)
+        self.move(speed, direction, speed, -direction, duration)
 
     def stop(self):
         with self._lock:
