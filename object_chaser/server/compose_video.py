@@ -9,6 +9,7 @@ Detected objects get a depth-colormap crop placed above the RGB image with label
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from multiprocessing import Pool
@@ -18,6 +19,53 @@ import cv2
 import numpy as np
 
 from hud import load_hud_config, draw_hud
+
+_LOG_DATETIME_RE = re.compile(
+    r'^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2}),(\d{3})')
+
+
+def parse_log_file(path):
+    """Parse log file, extract lines starting with a datetime.
+
+    Returns sorted list of (seconds_since_midnight, full_line_text).
+    """
+    entries = []
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.rstrip('\n')
+                m = _LOG_DATETIME_RE.match(line)
+                if m:
+                    h = int(m.group(2))
+                    mi = int(m.group(3))
+                    s = int(m.group(4))
+                    ms = int(m.group(5))
+                    ts = h * 3600 + mi * 60 + s + ms / 1000.0
+                    entries.append((ts, line))
+    except FileNotFoundError:
+        pass
+    return entries
+
+
+def find_most_recent(target_ts, entries):
+    """Find most recent entry with timestamp <= target_ts.
+
+    Returns line text or None.
+    """
+    if not entries:
+        return None
+    lo, hi = 0, len(entries) - 1
+    result = None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if entries[mid][0] <= target_ts:
+            result = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    if result is not None:
+        return entries[result][1]
+    return None
 
 
 def parse_timestamp(name: str) -> float:
@@ -356,6 +404,38 @@ def _draw_debug_sources(frame, debug_info):
                     (180, 180, 180), ft, cv2.LINE_AA)
 
 
+def _draw_log_lines(frame, debug_info):
+    """Draw log lines from body_follow/servo/yolo at top-left."""
+    log_keys = [("body_follow", (120, 255, 200)),   # accent green
+                ("servo",       (200, 220, 200)),   # primary
+                ("yolo",        (200, 180, 120))]    # blue-ish
+    lines = []
+    for name, color in log_keys:
+        text = debug_info.get(f"log_{name}")
+        if text:
+            lines.append((name, text, color))
+    if not lines:
+        return
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fs, ft = 0.35, 1
+    lh = 16
+    x = 8
+    y = 20
+    max_chars = 180
+
+    # Background
+    max_w = max(cv2.getTextSize(t[:max_chars], font, fs, ft)[0][0]
+                for _, t, _ in lines) + 12
+    cv2.rectangle(frame, (x - 4, y - 14),
+                  (x + max_w, y + lh * len(lines) - 2),
+                  (0, 0, 0), -1)
+    for i, (name, text, color) in enumerate(lines):
+        display = text[:max_chars]
+        cv2.putText(frame, display, (x, y + i * lh), font, fs,
+                    color, ft, cv2.LINE_AA)
+
+
 def _process_frame(args):
     """Process a single frame (runs in worker process)."""
     rgb_path, depth_path, detections, servo_state, debug_info = args
@@ -376,6 +456,7 @@ def _process_frame(args):
 
     if _worker_hud_cfg and _worker_hud_cfg.get("debug_sources"):
         _draw_debug_sources(frame, debug_info)
+        _draw_log_lines(frame, debug_info)
 
     return frame
 
@@ -453,6 +534,15 @@ def main():
     # Load HUD config
     hud_cfg = load_hud_config()
 
+    # Load log files for overlay
+    log_sources = {}
+    log_names = hud_cfg.get("log_sources", []) if hud_cfg else []
+    log_dir = session / "logs"
+    for name in log_names:
+        log_path = log_dir / f"{name}.log"
+        log_sources[name] = parse_log_file(str(log_path))
+        print(f"Log {name}: {len(log_sources[name])} entries")
+
     # Single frame mode
     if args.frame:
         depth_name = Path(args.frame).stem
@@ -488,6 +578,8 @@ def main():
             "yolo": yolo_ts or "-",
             "servo": servo_ts or "-",
         }
+        for name, entries in log_sources.items():
+            debug_info[f"log_{name}"] = find_most_recent(depth_ts, entries)
 
         print(f"RGB:   {debug_info['rgb']}")
         print(f"Depth: {debug_info['depth']}")
@@ -616,6 +708,8 @@ def main():
             "yolo": yolo_ts or "-",
             "servo": servo_ts or "-",
         }
+        for name, entries in log_sources.items():
+            debug_info[f"log_{name}"] = find_most_recent(rgb_ts, entries)
         frame_args.append((str(rgb_path), depth_path, detections, servo_state, debug_info))
 
     # Parallel processing

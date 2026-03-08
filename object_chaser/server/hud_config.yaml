@@ -49,7 +49,14 @@ hud:
     color_near: [100, 255, 120]   # light green
 
   # Debug: show source filenames/timestamps in bottom-left
-  debug_sources: false
+  debug_sources: true
+
+  # Log lines overlay: show most recent log line per source at top-left
+  # Each name maps to <session>/logs/<name>.log
+  log_sources:
+    - body_follow
+    - servo
+    - yolo
 
   # Spacing between elements
   gap: 30
