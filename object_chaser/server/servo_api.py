@@ -147,6 +147,15 @@ class ServoController:
             "step_delay": self.step_delay
         }
 
+import logging
+track_logger = logging.getLogger("tracks")
+track_logger.setLevel(logging.INFO)
+_track_handler = logging.StreamHandler()
+_track_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+track_logger.addHandler(_track_handler)
+
+
 class TrackController:
     """Controller for tank tracks via PCA9685 boards"""
 
@@ -180,13 +189,18 @@ class TrackController:
             self.pca[track].channels[0].duty_cycle = 0  # stop
 
     def move(self, left_speed: float, left_dir: int, right_speed: float, right_dir: int, duration: float = 0):
-        """Move both tracks. If duration > 0, auto-stop after duration seconds."""
+        """Move both tracks. If duration > 0, auto-stop after duration seconds.
+        Physical mapping: pca[0]=0x40 is RIGHT track, pca[1]=0x41 is LEFT track.
+        Direction convention: left_dir uses track-0 convention, right_dir uses track-1."""
         with self._lock:
             if self._stop_timer is not None:
                 self._stop_timer.cancel()
                 self._stop_timer = None
-            self._set_track(0, left_speed, left_dir)
-            self._set_track(1, right_speed, right_dir)
+            self._set_track(0, right_speed, left_dir)
+            self._set_track(1, left_speed, right_dir)
+            track_logger.info(f"HW move: pca0(0x40)={right_speed:.3f} dir={left_dir}  "
+                              f"pca1(0x41)={left_speed:.3f} dir={right_dir}  "
+                              f"(logical L={left_speed:.3f} R={right_speed:.3f})")
             self.left_speed = left_speed
             self.left_dir = left_dir
             self.right_speed = right_speed
@@ -209,6 +223,7 @@ class TrackController:
             self._set_track(1, 0, 0)
             self.left_speed = 0.0
             self.right_speed = 0.0
+            track_logger.info("HW stop: both tracks stopped")
 
     def get_status(self) -> dict:
         return {"status": "ok"}

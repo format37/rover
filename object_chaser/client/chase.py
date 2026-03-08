@@ -148,6 +148,7 @@ def _send_servo_speed(speed):
 def _send_tracks(left_speed, left_dir, right_speed, right_dir):
     global _tracks_moving
     _tracks_moving = True
+    logger.info(f"TrackCmd: L={left_speed:.3f} dir={left_dir}  R={right_speed:.3f} dir={right_dir}")
     try:
         requests.post(f"{_servo_url}/tracks/move",
                       json={"left_speed": left_speed, "left_dir": left_dir,
@@ -161,6 +162,7 @@ def _send_tracks(left_speed, left_dir, right_speed, right_dir):
 def _send_rotate(speed, direction, duration):
     global _tracks_moving
     _tracks_moving = True
+    logger.info(f"RotateCmd: speed={speed:.3f} dir={direction} dur={duration:.2f}s")
     try:
         requests.post(f"{_servo_url}/tracks/rotate",
                       json={"speed": speed, "direction": direction,
