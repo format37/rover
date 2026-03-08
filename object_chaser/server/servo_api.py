@@ -207,7 +207,7 @@ class TrackController:
             hw_left_dir = 0 if left_dir else 1  # Invert left track: mirrored on chassis
             self._set_track(0, left_speed, hw_left_dir)   # pca[0] = 0x40 = left
             self._set_track(1, right_speed, right_dir)     # pca[1] = 0x41 = right
-            track_logger.info(f"TrackController.Move: left_speed={left_speed:.3f} dir={left_dir}  "
+            track_logger.info(f"TrackController.Move: left_speed={left_speed:.3f} dir={left_dir} ({hw_left_dir}) "
                               f"right_speed={right_speed:.3f} dir={right_dir}")
             self.left_speed = left_speed
             self.left_dir = left_dir
