@@ -15,7 +15,7 @@ DETECTION_CONFIDENCE_MIN = 0.7 # Ignore detections below this confidence
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
-SPEED_MAX = 0.40               # Max track speed
+SPEED_MAX = 0.60               # Max track speed
 SPEED_MIN = 0.03               # Min track speed
 
 # Steering
@@ -30,7 +30,7 @@ ROTATION_DEG_PER_SEC = 15.0    # Degrees of body rotation per second at ROTATION
 
 # Search
 SEARCH_TIMEOUT = 2.0           # Seconds without detection -> start search
-SEARCH_SWEEPS_BEFORE_TURN = 10 # Full sweeps before 180 deg body turn
+SEARCH_SWEEPS_BEFORE_TURN = 2 # Full sweeps before 180 deg body turn
 
 # Depth
 DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by 20% per side before sampling depth
