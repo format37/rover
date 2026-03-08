@@ -9,7 +9,7 @@ CAMERA_FOV = 87 # RGB: 87° × 58°
 # Depth: 69° × 42°
 
 # Detection
-DETECTION_CONFIDENCE_MIN = 0.8 # Ignore detections below this confidence
+DETECTION_CONFIDENCE_MIN = 0.0 # Ignore detections below this confidence
 
 # Tracking thresholds
 FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
