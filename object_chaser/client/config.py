@@ -44,3 +44,8 @@ SAFETY_TIMEOUT = 2.0           # Tracks auto-stop if no new command
 SERVO_API_URL = 'http://localhost:8000'
 CAMERA_SERVER_URL = 'http://localhost:8080'
 YOLO_URL = 'http://localhost:8765'
+DETECTION_SERVER_URL = 'http://localhost:8090'
+
+# Detection server
+DETECTION_MAX_AGE_MS = 500   # discard result if older than this → treat as no detection
+SERVO_DIR = -1               # sign of servo direction; validate on hardware before use

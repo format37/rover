@@ -26,7 +26,7 @@ from config import (
     SPEED_MAX, SPEED_MIN, STEERING_GAIN, DECEL_STEP,
     ROTATION_SPEED, ROTATION_DEG_PER_SEC,
     SEARCH_TIMEOUT, SEARCH_SWEEPS_BEFORE_TURN, SEARCH_PIVOT_ANGLE,
-    DEPTH_BBOX_SHRINK, SAFETY_TIMEOUT,
+    SAFETY_TIMEOUT,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,6 @@ STATE_ORIENTING = "orienting"
 
 # Module state
 _servo_url = ''
-_camera_url = ''
 _state = STATE_LOST
 _current_speed = 0.0
 _last_detection_time = None
@@ -53,10 +52,9 @@ _orient_pivot_end = None
 _tracks_moving = False
 
 
-def init(servo_url='http://localhost:8000', camera_url='http://localhost:8080'):
-    global _servo_url, _camera_url, _state, _current_speed, _last_detection_time
+def init(servo_url='http://localhost:8000'):
+    global _servo_url, _state, _current_speed, _last_detection_time
     _servo_url = servo_url
-    _camera_url = camera_url
     _state = STATE_LOST
     _current_speed = 0.0
     _last_detection_time = time.monotonic()
@@ -114,18 +112,6 @@ def _get_servo_status():
             return r.json()
     except requests.exceptions.RequestException as e:
         logger.warning(f"Servo status failed: {e}")
-    return None
-
-
-def _get_distance(bbox):
-    try:
-        r = requests.post(f"{_camera_url}/distance",
-                          json={"bbox": bbox, "shrink": DEPTH_BBOX_SHRINK},
-                          timeout=0.5)
-        if r.status_code == 200:
-            return r.json().get('distance')
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Distance query failed: {e}")
     return None
 
 
@@ -228,8 +214,8 @@ def _do_tracking(detection, x_normalized):
         _stop_tracks()
         return _result("orienting", servo_angle=servo_angle)
 
-    # Distance
-    distance = _get_distance(detection['bbox'])
+    # Distance is pre-attached by detection_server
+    distance = detection.get('distance')
     if distance is None:
         logger.warning("Depth returned None, stopping tracks")
         _stop_tracks()
