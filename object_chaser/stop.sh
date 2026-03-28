@@ -6,7 +6,7 @@ PIDFILE="$DIR/.pids"
 
 if [ ! -f "$PIDFILE" ]; then
     echo "No pidfile found; killing by name only."
-    pkill -f "camera_server\.py\|yolo_server\.py\|servo_api\.py\|detection_server\.py\|body_follow\.py" 2>/dev/null || true
+    pkill -f "camera_server\.py|yolo_server\.py|servo_api\.py|detection_server\.py|body_follow\.py" 2>/dev/null || true
     echo "All stopped."
     exit 0
 fi
@@ -35,6 +35,6 @@ done
 rm -f "$PIDFILE"
 
 # Safety net: catch any processes started outside start.sh
-pkill -f "camera_server\.py\|yolo_server\.py\|servo_api\.py\|detection_server\.py\|body_follow\.py" 2>/dev/null || true
+pkill -f "camera_server\.py|yolo_server\.py|servo_api\.py|detection_server\.py|body_follow\.py" 2>/dev/null || true
 
 echo "All stopped."
