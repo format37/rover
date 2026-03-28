@@ -5,3 +5,4 @@ object_chaser/client/prompt.md
 __pycache__/
 object_chaser/server/sessions/
 logs/
+CLAUDE.md
