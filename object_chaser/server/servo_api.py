@@ -24,7 +24,15 @@ from config import TRACK_MAX_DURATION
 class ServoController:
     def __init__(self, channel: int = 0, address: int = 0x42):
         """Initialize servo controller with smooth movement capability"""
-        self.kit = ServoKit(channels=16, address=address)
+        for attempt in range(5):
+            try:
+                self.kit = ServoKit(channels=16, address=address)
+                break
+            except OSError as e:
+                if attempt == 4:
+                    raise
+                print(f"Servo I2C init attempt {attempt + 1} failed: {e}, retrying in 1s")
+                time.sleep(1.0)
         self.servo = self.kit.servo[channel]
         
         # Movement state
@@ -164,14 +172,22 @@ class TrackController:
 
     def __init__(self, left_address: int = 0x40, right_address: int = 0x41):
         i2c_bus = busio.I2C(SCL, SDA)
-        self.pca = [
-            PCA9685(i2c_bus, address=left_address),
-            PCA9685(i2c_bus, address=right_address),
-        ]
-        for p in self.pca:
-            p.frequency = 60
-            p.channels[0].duty_cycle = 0
-            p.channels[1].duty_cycle = 0xFFFF
+        for attempt in range(5):
+            try:
+                self.pca = [
+                    PCA9685(i2c_bus, address=left_address),
+                    PCA9685(i2c_bus, address=right_address),
+                ]
+                for p in self.pca:
+                    p.frequency = 60
+                    p.channels[0].duty_cycle = 0
+                    p.channels[1].duty_cycle = 0xFFFF
+                break
+            except OSError as e:
+                if attempt == 4:
+                    raise
+                print(f"Track I2C init attempt {attempt + 1} failed: {e}, retrying in 1s")
+                time.sleep(1.0)
         self._lock = threading.Lock()
         self._stop_timer = None
         self.left_speed = 0.0
