@@ -81,6 +81,8 @@ async def run(label='person'):
                 }) + "\n")
                 jsonl_file.flush()
 
+                await asyncio.sleep(0.05)  # cap control loop at ~20fps
+
         except KeyboardInterrupt:
             print("\nStopped.")
         finally:
