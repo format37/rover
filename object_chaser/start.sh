@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start all 4 processes for the object chaser.
+# Start all 5 processes for the object chaser.
 # Usage: ./start.sh [label]   (default: person)
 
 set -e
@@ -52,20 +52,20 @@ export PYTHONUNBUFFERED=1
 echo "Starting object chaser (label=$LABEL)..."
 
 # 1. YOLO server
-echo "[1/4] Starting YOLO server..."
+echo "[1/5] Starting YOLO server..."
 cd "$SERVER_DIR"
 python3.6 yolo_server.py > "$LOG_DIR/yolo.log" 2>&1 &
 YOLO_PID=$!
 echo "  PID=$YOLO_PID"
 
 # 2. Servo + Track API
-echo "[2/4] Starting servo API..."
+echo "[2/5] Starting servo API..."
 python3.8 servo_api.py > "$LOG_DIR/servo.log" 2>&1 &
 SERVO_PID=$!
 echo "  PID=$SERVO_PID"
 
 # 3. Camera server
-echo "[3/4] Starting camera server..."
+echo "[3/5] Starting camera server..."
 python3.8 camera_server.py > "$LOG_DIR/camera.log" 2>&1 &
 CAMERA_PID=$!
 echo "  PID=$CAMERA_PID"
@@ -73,24 +73,29 @@ echo "  PID=$CAMERA_PID"
 # Save PIDs
 echo "$YOLO_PID $SERVO_PID $CAMERA_PID" > "$PIDFILE"
 
-# Wait for all servers
+# Wait for all three servers
 wait_for_http "Servo API"     "http://localhost:8000/status" "$SERVO_PID"  60  "$LOG_DIR/servo.log"
 wait_for_http "Camera server" "http://localhost:8080/status" "$CAMERA_PID" 30  "$LOG_DIR/camera.log"
 wait_for_http "YOLO (warmup)" "http://localhost:8765/ready"  "$YOLO_PID"   120 "$LOG_DIR/yolo.log"
 
-# Activate saving now that YOLO is warm
-echo "Activating frame saving..."
-curl -s -X POST http://localhost:8080/start-saving > /dev/null
+# 4. Detection server (depends on camera, YOLO, servo all being ready)
+echo "[4/5] Starting detection server..."
+cd "$SERVER_DIR"
+python3.8 detection_server.py > "$LOG_DIR/detection.log" 2>&1 &
+DETECTION_PID=$!
+echo "  PID=$DETECTION_PID"
+echo "$YOLO_PID $SERVO_PID $CAMERA_PID $DETECTION_PID" > "$PIDFILE"
+wait_for_http "Detection server" "http://localhost:8090/detection" "$DETECTION_PID" 30 "$LOG_DIR/detection.log"
 
-# 4. Body follow client
-echo "[4/4] Starting body follow (label=$LABEL)..."
+# 5. Body follow client
+echo "[5/5] Starting body follow (label=$LABEL)..."
 cd "$CLIENT_DIR"
 python3.8 body_follow.py --label "$LABEL" > "$LOG_DIR/body_follow.log" 2>&1 &
 BODY_PID=$!
 echo "  PID=$BODY_PID"
 
 # Update pidfile
-echo "$YOLO_PID $SERVO_PID $CAMERA_PID $BODY_PID" > "$PIDFILE"
+echo "$YOLO_PID $SERVO_PID $CAMERA_PID $DETECTION_PID $BODY_PID" > "$PIDFILE"
 
 echo ""
 echo "All processes started. Tailing body_follow log (Ctrl+C to stop monitoring)..."
