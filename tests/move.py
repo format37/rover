@@ -16,7 +16,7 @@ MIN_SPEED  = 0.01     # minimum effective speed (below this = stopped)
 #   'frequency' — vary PWM frequency (step rate) for stepper drivers; hard ceiling ~1526 Hz via PCA9685
 #   'duty_cycle' — fixed PWM frequency, vary duty cycle 0-100%; no speed ceiling, suits PWM/DIR drivers
 CONTROL_MODE = 'duty_cycle'
-PWM_FREQ     = 1000   # fixed PWM frequency for duty_cycle mode (Hz)
+PWM_FREQ     = 1526   # fixed PWM frequency for duty_cycle mode — 1526 Hz is PCA9685 hardware max
 
 
 class TrackController:
@@ -28,13 +28,17 @@ class TrackController:
             PCA9685(i2c_bus, address=0x40),
             PCA9685(i2c_bus, address=0x41),
         ]
+        # Set frequency once at init. For duty_cycle mode it never changes again.
+        # For frequency mode it will be updated per-call (cached to avoid redundant 5ms I2C sleeps).
+        init_freq = PWM_FREQ if CONTROL_MODE == 'duty_cycle' else 60
         for p in self.pca:
-            p.frequency = 60
+            p.frequency = init_freq
             p.channels[0].duty_cycle = 0
             p.channels[1].duty_cycle = 0xFFFF
 
         self.current_speed = 0.0   # what hardware sees right now
         self.goal_speed    = 0.0   # what we want to reach (set by move/stop)
+        self._freq_cache   = [None, None]  # last written freq per track (frequency mode only)
         self.dir0 = 0
         self.dir1 = 1
 
@@ -50,13 +54,16 @@ class TrackController:
         if speed >= MIN_SPEED:
             self.pca[track].channels[1].duty_cycle = int(direction * 0xFFFF)  # DIR
             if CONTROL_MODE == 'duty_cycle':
-                # Fixed frequency, duty cycle = speed. No PCA9685 frequency ceiling.
-                self.pca[track].frequency              = PWM_FREQ
+                # Frequency already set at init and never changes.
+                # Step rate = PWM_FREQ (fixed). Duty cycle varies 0–100% with speed.
                 self.pca[track].channels[0].duty_cycle = int(speed * 0xFFFF)
             else:
-                # Vary frequency as step rate (stepper drivers). Max ~1526 Hz via PCA9685.
+                # Stepper mode: step rate = frequency. Only write if changed — each
+                # PCA9685 frequency write costs ~5ms I2C sleep.
                 freq = max(24, min(1526, int(speed * 1526)))
-                self.pca[track].frequency              = freq
+                if freq != self._freq_cache[track]:
+                    self.pca[track].frequency = freq
+                    self._freq_cache[track] = freq
                 self.pca[track].channels[0].duty_cycle = 0x7FFF  # 50% step pulses
         else:
             self.pca[track].channels[0].duty_cycle = 0        # stop
