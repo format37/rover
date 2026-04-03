@@ -2,71 +2,125 @@ from board import SCL, SDA
 import busio
 from adafruit_pca9685 import PCA9685
 import time
+import threading
 
-speed = 0.05
-delay = 3
+# Config
+target_speed = 0.05   # cruise speed (0.0 – 1.0)
+delay = 3             # seconds to hold at cruise speed
 
-RAMP_STEPS = 15
-RAMP_TIME = 0.4  # seconds for full ramp up or down
+STEP_SIZE  = 0.005    # speed delta per tick  (servo_api: step_size = 1.0 deg)
+STEP_DELAY = 0.02     # 50 Hz loop            (servo_api: step_delay = 0.02 s)
 
-def set_track(track, spd, direction):
-    if spd > 0:
-        frequency = spd * 2300
-        direction = direction * 0xffff
-        pca[track].frequency = int(frequency)
-        pca[track].channels[1].duty_cycle = int(direction)
-        pca[track].channels[0].duty_cycle = 0x7fff  # go
-    else:
-        pca[track].channels[0].duty_cycle = 0       # stop
 
-def ramp(from_spd, to_spd, dir0, dir1):
-    for i in range(RAMP_STEPS + 1):
-        s = from_spd + (to_spd - from_spd) * i / RAMP_STEPS
-        set_track(0, s, dir0)
-        set_track(1, s, dir1)
-        time.sleep(RAMP_TIME / RAMP_STEPS)
+class TrackController:
+    """Smooth track controller — mirrors ServoController threading pattern."""
 
-def move(dir0, dir1):
-    ramp(0, speed, dir0, dir1)
-    time.sleep(delay)
-    ramp(speed, 0, dir0, dir1)
-    set_track(0, 0, 0)
-    set_track(1, 0, 0)
-    print('stop')
+    def __init__(self):
+        i2c_bus = busio.I2C(SCL, SDA)
+        self.pca = [
+            PCA9685(i2c_bus, address=0x40),
+            PCA9685(i2c_bus, address=0x41),
+        ]
+        for p in self.pca:
+            p.frequency = 60
+            p.channels[0].duty_cycle = 0
+            p.channels[1].duty_cycle = 0xFFFF
 
-# tracks init
-i2c_bus = busio.I2C(SCL, SDA)
-pca = [
-    PCA9685(i2c_bus, address=0x40),
-    PCA9685(i2c_bus, address=0x41)
-]
+        self.current_speed = 0.0   # what hardware sees right now
+        self.goal_speed    = 0.0   # what we want to reach (set by move/stop)
+        self.dir0 = 0
+        self.dir1 = 1
 
-for i in range(0, 2):
-    pca[i].frequency = 60
-    pca[i].channels[0].duty_cycle = 0
-    pca[i].channels[1].duty_cycle = 0xffff
+        self._lock        = threading.Lock()
+        self._stop_event  = threading.Event()
+        self._thread      = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+        print("Track controller ready")
 
-print('start')
-print(f'speed={speed}  |  w/s/a/d=move, sp=<val>=set speed, x=exit')
+    # --- hardware ---
+
+    def _set_track(self, track, speed, direction):
+        if speed > 0:
+            self.pca[track].frequency              = int(speed * 2300)
+            self.pca[track].channels[1].duty_cycle = int(direction * 0xFFFF)
+            self.pca[track].channels[0].duty_cycle = 0x7FFF   # go
+        else:
+            self.pca[track].channels[0].duty_cycle = 0        # stop
+
+    # --- background loop (servo_api._movement_loop equivalent) ---
+
+    def _loop(self):
+        while not self._stop_event.is_set():
+            with self._lock:
+                dist = self.goal_speed - self.current_speed
+                if abs(dist) > STEP_SIZE:
+                    self.current_speed += STEP_SIZE if dist > 0 else -STEP_SIZE
+                else:
+                    self.current_speed = self.goal_speed
+                spd, d0, d1 = self.current_speed, self.dir0, self.dir1
+
+            self._set_track(0, spd, d0)
+            self._set_track(1, spd, d1)
+            time.sleep(STEP_DELAY)
+
+    # --- public API ---
+
+    def move(self, dir0, dir1, cruise_speed):
+        """Ramp up to cruise_speed in direction (dir0, dir1)."""
+        with self._lock:
+            self.dir0       = dir0
+            self.dir1       = dir1
+            self.goal_speed = cruise_speed
+
+    def stop(self):
+        """Ramp down to 0."""
+        with self._lock:
+            self.goal_speed = 0.0
+
+    def wait_stopped(self):
+        """Block until ramp-down finishes."""
+        while True:
+            with self._lock:
+                done = self.current_speed == 0.0
+            if done:
+                break
+            time.sleep(STEP_DELAY)
+
+    def shutdown(self):
+        self._stop_event.set()
+        self._thread.join(timeout=1)
+        self._set_track(0, 0, 0)
+        self._set_track(1, 0, 0)
+
+
+# --- main ---
+
+tc = TrackController()
+print(f'speed={target_speed}  |  w/s/a/d=move  sp=<val>=set speed  x=exit')
 
 cmd = ''
 while cmd != 'x':
     cmd = input('cmd: ').strip()
-    if cmd == 'w':
-        # forward
-        move(0, 1)
-    elif cmd == 's':
-        # backward
-        move(1, 0)
-    elif cmd == 'd':
-        # rotate left
-        move(0, 0)
-    elif cmd == 'a':
-        # rotate right
-        move(1, 1)
+
+    if cmd in ('w', 's', 'a', 'd'):
+        dirs = {
+            'w': (0, 1),   # forward
+            's': (1, 0),   # backward
+            'd': (0, 0),   # rotate left
+            'a': (1, 1),   # rotate right
+        }
+        d0, d1 = dirs[cmd]
+        tc.move(d0, d1, target_speed)
+        time.sleep(delay)
+        tc.stop()
+        tc.wait_stopped()
+        print('stop')
+
     elif cmd.startswith('sp='):
         try:
-            speed = float(cmd[3:])
-            print(f'speed={speed}')
+            target_speed = float(cmd[3:])
+            print(f'speed={target_speed}')
         except ValueError:
             print('invalid speed')
+
+tc.shutdown()
