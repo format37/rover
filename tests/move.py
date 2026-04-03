@@ -10,6 +10,7 @@ delay = 3             # seconds to hold at cruise speed
 
 STEP_SIZE  = 0.005    # speed delta per tick  (servo_api: step_size = 1.0 deg)
 STEP_DELAY = 0.02     # 50 Hz loop            (servo_api: step_delay = 0.02 s)
+MIN_SPEED  = 0.015    # PCA9685 min safe freq: 24 Hz = 24/2300 ≈ 0.011; use 0.015 for margin
 
 
 class TrackController:
@@ -40,7 +41,9 @@ class TrackController:
     # --- hardware ---
 
     def _set_track(self, track, speed, direction):
-        if speed > 0:
+        # PCA9685 prescale is a ubyte; frequency must be >= 24 Hz (speed >= ~0.011).
+        # Treat anything below MIN_SPEED as stopped to avoid struct.error during ramp.
+        if speed >= MIN_SPEED:
             self.pca[track].frequency              = int(speed * 2300)
             self.pca[track].channels[1].duty_cycle = int(direction * 0xFFFF)
             self.pca[track].channels[0].duty_cycle = 0x7FFF   # go
