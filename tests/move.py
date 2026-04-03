@@ -8,15 +8,15 @@ import threading
 target_speed = 0.05   # cruise speed (0.0 – 1.0)
 delay = 3             # seconds to hold at cruise speed
 
-STEP_SIZE  = 0.005    # speed delta per tick  (servo_api: step_size = 1.0 deg)
-STEP_DELAY = 0.02     # 50 Hz loop            (servo_api: step_delay = 0.02 s)
-MIN_SPEED  = 0.01     # minimum effective speed (below this = stopped)
+STEP_SIZE  = 0.05     # speed delta per tick — larger = faster ramp (each freq write costs ~5ms I2C)
+STEP_DELAY = 0.02     # 50 Hz loop
+MIN_SPEED  = 0.016    # below this → stop (PCA9685 min freq 24 Hz = 24/1526 ≈ 0.016)
 
 # Motor control mode:
-#   'frequency' — vary PWM frequency (step rate) for stepper drivers; hard ceiling ~1526 Hz via PCA9685
-#   'duty_cycle' — fixed PWM frequency, vary duty cycle 0-100%; no speed ceiling, suits PWM/DIR drivers
-CONTROL_MODE = 'duty_cycle'
-PWM_FREQ     = 1526   # fixed PWM frequency for duty_cycle mode — 1526 Hz is PCA9685 hardware max
+#   'frequency' — vary PWM frequency as step rate; sp= directly sets speed 0.0–1.0 → 24–1526 Hz
+#   'duty_cycle' — fixed PWM freq, duty cycle 0–100%; sp= has no effect on stepper speed (enable-only)
+CONTROL_MODE = 'frequency'
+PWM_FREQ     = 1526   # used only in duty_cycle mode
 
 
 class TrackController:
