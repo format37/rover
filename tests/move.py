@@ -10,11 +10,13 @@ delay = 3             # seconds to hold at cruise speed
 
 STEP_SIZE  = 0.005    # speed delta per tick  (servo_api: step_size = 1.0 deg)
 STEP_DELAY = 0.02     # 50 Hz loop            (servo_api: step_delay = 0.02 s)
-# PCA9685 frequency range: 24 Hz (prescale=253) – 1526 Hz (prescale=3).
-# speed=1.0 maps to 1526 Hz (hardware max). speed=0.0 maps to 24 Hz (hardware min).
-FREQ_MIN   = 24
-FREQ_MAX   = 1526
-MIN_SPEED  = 0.016    # FREQ_MIN/FREQ_MAX = 24/1526 ≈ 0.0157; use 0.016 for margin
+MIN_SPEED  = 0.01     # minimum effective speed (below this = stopped)
+
+# Motor control mode:
+#   'frequency' — vary PWM frequency (step rate) for stepper drivers; hard ceiling ~1526 Hz via PCA9685
+#   'duty_cycle' — fixed PWM frequency, vary duty cycle 0-100%; no speed ceiling, suits PWM/DIR drivers
+CONTROL_MODE = 'duty_cycle'
+PWM_FREQ     = 1000   # fixed PWM frequency for duty_cycle mode (Hz)
 
 
 class TrackController:
@@ -45,13 +47,17 @@ class TrackController:
     # --- hardware ---
 
     def _set_track(self, track, speed, direction):
-        # PCA9685 prescale is a ubyte; frequency must be 24–1526 Hz.
-        # speed=1.0 → FREQ_MAX (1526 Hz). Treat below MIN_SPEED as stopped.
         if speed >= MIN_SPEED:
-            freq = FREQ_MIN + speed * (FREQ_MAX - FREQ_MIN)  # 24–1526 Hz over 0–1
-            self.pca[track].frequency              = int(freq)
-            self.pca[track].channels[1].duty_cycle = int(direction * 0xFFFF)
-            self.pca[track].channels[0].duty_cycle = 0x7FFF   # go
+            self.pca[track].channels[1].duty_cycle = int(direction * 0xFFFF)  # DIR
+            if CONTROL_MODE == 'duty_cycle':
+                # Fixed frequency, duty cycle = speed. No PCA9685 frequency ceiling.
+                self.pca[track].frequency              = PWM_FREQ
+                self.pca[track].channels[0].duty_cycle = int(speed * 0xFFFF)
+            else:
+                # Vary frequency as step rate (stepper drivers). Max ~1526 Hz via PCA9685.
+                freq = max(24, min(1526, int(speed * 1526)))
+                self.pca[track].frequency              = freq
+                self.pca[track].channels[0].duty_cycle = 0x7FFF  # 50% step pulses
         else:
             self.pca[track].channels[0].duty_cycle = 0        # stop
 
@@ -104,7 +110,7 @@ class TrackController:
 # --- main ---
 
 tc = TrackController()
-print(f'speed={target_speed}  |  w/s/a/d=move  sp=<val>=set speed  x=exit')
+print(f'speed={target_speed}  mode={CONTROL_MODE}  |  w/s/a/d=move  sp=<val>=set speed  x=exit')
 
 cmd = ''
 while cmd != 'x':
