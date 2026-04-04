@@ -7,6 +7,8 @@ DETECTION_CONFIDENCE_MIN = 0.8  # Ignore detections below this confidence
 
 # Tracking thresholds
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
+BACK_DISTANCE = 0.5            # Back up when closer than this (meters)
+BACK_SPEED = 0.3               # Speed for emergency reverse
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
 SPEED_MAX = 0.80               # Max track speed
 SPEED_MIN = 0.03               # Min track speed

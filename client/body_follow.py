@@ -91,13 +91,19 @@ async def run(targets: list):
                 all_detections = det_result['detections'] if age_ms <= DETECTION_MAX_AGE_MS else []
                 selected = select_target(all_detections, targets)
 
+                distances = [d['distance'] for d in all_detections
+                             if d.get('distance') is not None]
+                min_distance = min(distances) if distances else None
+
                 if selected:
                     x_normalized = selected['centroid_x_norm']
                     logger.info(f"'{selected['label']}': conf={selected['confidence']:.2f}, "
                                 f"x={x_normalized:.2f}")
-                    result = chase.update(detection=selected, x_normalized=x_normalized)
+                    result = chase.update(detection=selected, x_normalized=x_normalized,
+                                          min_distance=min_distance)
                 else:
-                    result = chase.update(detection=None, x_normalized=None)
+                    result = chase.update(detection=None, x_normalized=None,
+                                          min_distance=min_distance)
 
                 # Log
                 jsonl_file.write(json.dumps({

@@ -21,7 +21,7 @@ import time
 import logging
 from config import (
     CAMERA_FOV,
-    STOP_DISTANCE, FAR_DISTANCE,
+    STOP_DISTANCE, BACK_DISTANCE, BACK_SPEED, FAR_DISTANCE,
     SPEED_MAX, SPEED_MIN, STEERING_GAIN, DECEL_STEP,
     ROTATION_SPEED, ROTATION_DEG_PER_SEC,
     SEARCH_TIMEOUT, SEARCH_SWEEP_DEG,
@@ -35,6 +35,7 @@ STATE_TRACKING = "tracking"
 STATE_LOST = "lost"
 STATE_SEARCHING = "searching"
 STATE_ORIENTING = "orienting"
+STATE_BACKING = "backing"
 
 # Search rotation sequence: right(0), left(1), right(0), then repeat
 _SEARCH_SEQUENCE = [0, 1, 0]
@@ -68,14 +69,26 @@ def get_state():
     return _state
 
 
-def update(detection, x_normalized):
+def update(detection, x_normalized, min_distance=None):
     """Main tick — called every frame.
 
     detection: dict with 'bbox', 'confidence', 'relative_position_deg', 'distance',
                'centroid_x_norm' (from detection server) or None
     x_normalized: object centroid 0-1 or None
+    min_distance: closest detected object distance (meters) across all detections, or None
     Returns dict with 'state', 'action', 'distance'.
     """
+    # Collision override: any detected object closer than BACK_DISTANCE → back up immediately
+    if min_distance is not None and min_distance <= BACK_DISTANCE:
+        if _state != STATE_BACKING:
+            _enter_state(STATE_BACKING)
+        return _do_backing(min_distance)
+
+    # Clear of danger: if we were backing, stop and reset to LOST
+    if _state == STATE_BACKING:
+        _stop_tracks()
+        _enter_state(STATE_LOST)
+
     if _state == STATE_TRACKING:
         return _do_tracking(detection, x_normalized)
     elif _state == STATE_LOST:
@@ -255,6 +268,12 @@ def _do_orienting(detection, x_normalized):
             return _result("orient_not_found")
 
     return _result("orienting")
+
+
+def _do_backing(distance):
+    logger.info(f"Collision avoidance: {distance:.2f}m <= {BACK_DISTANCE}m, reversing")
+    _send_tracks(BACK_SPEED, 0, BACK_SPEED, 0)  # both dir=0 = backward
+    return _result("backing", distance=distance)
 
 
 # --- Helpers ---
