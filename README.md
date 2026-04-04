@@ -73,12 +73,3 @@ bash download_session.sh <session_name>
 3. Copy runtime logs into `sessions/<session_name>/logs/`
 4. Clean up the archive on the Jetson
 5. Auto-run `compose_video.py` to render the annotated video with HUD overlay
-
-## Track directions
-
-```
-Forward:       track0 dir=0, track1 dir=1
-Backward:      track0 dir=1, track1 dir=0
-Rotate left:   both dir=1
-Rotate right:  both dir=0
-```
