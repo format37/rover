@@ -75,7 +75,6 @@ async def run(label='person'):
                     "target_confidence": detections[0]['confidence'] if detections else None,
                     "x_normalized": detections[0]['centroid_x_norm'] if detections else None,
                     "distance": result.get('distance'),
-                    "servo_angle": result.get('servo_angle'),
                     "action": result.get('action'),
                     "state": result.get('state'),
                 }) + "\n")

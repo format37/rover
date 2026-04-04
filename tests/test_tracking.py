@@ -8,8 +8,7 @@ Runs for --duration seconds, logging detections and actions.
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                '..', 'object_chaser', 'client'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'client'))
 
 import time
 import argparse
@@ -92,7 +91,6 @@ async def run(label, duration):
                     "action": action,
                     "detections": len(detections),
                     "distance": result.get('distance'),
-                    "servo_angle": result.get('servo_angle'),
                 }) + "\n")
                 jsonl_file.flush()
 

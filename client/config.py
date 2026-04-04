@@ -1,18 +1,11 @@
 """Shared configuration for chase state machine and body_follow."""
 
-# Servo
-SERVO_CENTER = 90.0
-SERVO_RANGE = 180
-NORMAL_SERVO_SPEED = 60
-SEARCH_SERVO_SPEED = 15
-CAMERA_FOV = 87 # RGB: 87° × 58°
-# Depth: 69° × 42°
+CAMERA_FOV = 87  # RGB: 87° × 58°
 
 # Detection
-DETECTION_CONFIDENCE_MIN = 0.0 # Ignore detections below this confidence
+DETECTION_CONFIDENCE_MIN = 0.0  # Ignore detections below this confidence
 
 # Tracking thresholds
-FORWARD_HEAD_THRESHOLD = 5.0   # Max head deviation (deg) to allow forward driving
 STOP_DISTANCE = 0.7            # Stop when closer (meters)
 FAR_DISTANCE = 3.0             # Full speed when farther (meters)
 SPEED_MAX = 0.70               # Max track speed
@@ -25,27 +18,25 @@ STEERING_GAIN = 1.0            # How aggressively tracks steer from x_normalized
 DECEL_STEP = 0.02              # Speed reduction per frame when losing object
 
 # Body rotation (time-based)
-ROTATION_SPEED = 0.08          # Track speed during pivot
-ROTATION_DEG_PER_SEC = 15.0    # Degrees of body rotation per second at ROTATION_SPEED
+ROTATION_SPEED = 0.08          # Track speed during pivot/search
+ROTATION_DEG_PER_SEC = 15.0   # Degrees per second at ROTATION_SPEED — calibrate on hardware
 
 # Search
 SEARCH_TIMEOUT = 2.0           # Seconds without detection -> start search
-SEARCH_SWEEPS_BEFORE_TURN = 2  # Full sweeps before body pivot
-SEARCH_PIVOT_ANGLE = 180        # Degrees to rotate body after sweep limit
-TRACK_MAX_DURATION = 30.0      # Max allowed duration for a single track command (seconds)
+SEARCH_SWEEP_DEG = 360         # Degrees per search rotation sweep (full circle each)
 
 # Depth
 DEPTH_BBOX_SHRINK = 0.2        # Shrink bbox by 20% per side before sampling depth
 
 # Safety
 SAFETY_TIMEOUT = 2.0           # Tracks auto-stop if no new command
+TRACK_MAX_DURATION = 30.0      # Max allowed duration for a single track command (seconds)
 
 # URLs
-SERVO_API_URL = 'http://localhost:8000'
+API_URL = 'http://localhost:8000'
 CAMERA_SERVER_URL = 'http://localhost:8080'
 YOLO_URL = 'http://localhost:8765'
 DETECTION_SERVER_URL = 'http://localhost:8090'
 
 # Detection server
-DETECTION_MAX_AGE_MS = 500   # discard result if older than this → treat as no detection
-SERVO_DIR = -1               # sign of servo direction; validate on hardware before use
+DETECTION_MAX_AGE_MS = 500     # Discard result older than this → treat as no detection

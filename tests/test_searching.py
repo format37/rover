@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Test SEARCHING state: head sweeps 0-180 looking for target.
+"""Test SEARCHING state: body rotates 360° right→left→right scanning for target.
 
-Requires all 3 servers running (camera, yolo, servo).
-No target needed — detections are ignored so the search runs fully.
+Requires camera, yolo, and track servers running.
+No target needed — detections are ignored so the full search sequence runs.
 
-The head sweeps back and forth. After SEARCH_SWEEPS_BEFORE_TURN full
-sweeps, the body pivots 180 degrees and sweeps restart.
+Each sweep is SEARCH_SWEEP_DEG / ROTATION_DEG_PER_SEC seconds long.
+Adjust ROTATION_DEG_PER_SEC in config.py to calibrate real vs expected rotation.
 
 Runs for --duration seconds (default 120 to see multiple sweeps).
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                '..', 'object_chaser', 'client'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'client'))
 
 import time
 import argparse
@@ -21,7 +20,7 @@ import json
 import logging
 import aiohttp
 import chase
-from config import CAMERA_SERVER_URL, YOLO_URL
+from config import CAMERA_SERVER_URL
 
 logger = logging.getLogger('test_searching')
 logger.setLevel(logging.INFO)
@@ -73,14 +72,13 @@ async def run(duration):
                     "timestamp": frame_ts,
                     "state": state,
                     "action": action,
-                    "servo_angle": result.get('servo_angle'),
-                    "sweeps": chase._search_sweeps,
+                    "sweep_index": chase._search_sweep_index,
                 }) + "\n")
                 jsonl_file.flush()
 
                 if frames % 30 == 0:
-                    logger.info(f"[{elapsed:.0f}s] servo={result.get('servo_angle'):.0f}deg "
-                                f"sweeps={chase._search_sweeps}")
+                    logger.info(f"[{elapsed:.0f}s] state={state} action={action} "
+                                f"sweep={chase._search_sweep_index}")
 
         except KeyboardInterrupt:
             logger.info("Interrupted")

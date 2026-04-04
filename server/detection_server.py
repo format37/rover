@@ -1,11 +1,11 @@
 """Detection server — async inference cache decoupling YOLO from the control loop.
 
-Runs its own tight inference loop (frame → YOLO → servo angle → depth → cache)
-and exposes the last result instantly via GET /detection, so the client control
-loop is no longer blocked by YOLO latency.
+Runs its own tight inference loop (frame → YOLO → depth → cache) and exposes
+the last result instantly via GET /detection, so the client control loop is no
+longer blocked by YOLO latency.
 
 Port: 8090
-Startup order: camera_server → yolo_server → servo_api → detection_server → client
+Startup order: camera_server → yolo_server → track_api → detection_server → client
 """
 import asyncio
 import sys
@@ -24,9 +24,9 @@ from fastapi import FastAPI
 # Config lives in the client directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'client'))
 from config import (
-    CAMERA_SERVER_URL, YOLO_URL, SERVO_API_URL,
-    DETECTION_CONFIDENCE_MIN, CAMERA_FOV, SERVO_CENTER,
-    DEPTH_BBOX_SHRINK, SERVO_DIR,
+    CAMERA_SERVER_URL, YOLO_URL,
+    DETECTION_CONFIDENCE_MIN, CAMERA_FOV,
+    DEPTH_BBOX_SHRINK,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -50,11 +50,10 @@ class Detection:
 class DetectionResult:
     timestamp: float              # time.time() when inference completed
     frame_ts: str                 # X-Timestamp from camera server
-    servo_angle: Optional[float]  # current_position at time of inference
     detections: List[Detection] = field(default_factory=list)
 
 
-_cache: DetectionResult = DetectionResult(timestamp=0.0, frame_ts='', servo_angle=None)
+_cache: DetectionResult = DetectionResult(timestamp=0.0, frame_ts='')
 _cache_lock: asyncio.Lock = asyncio.Lock()
 _loop_fps: float = 0.0
 _last_result_age_ms: float = 0.0
@@ -99,19 +98,7 @@ async def _inference_loop() -> None:
                 logger.warning(f"YOLO inference failed: {e}")
                 continue
 
-            # 3. Servo angle — graceful degradation if servo_api unavailable
-            servo_angle: Optional[float] = None
-            try:
-                async with session.get(
-                        f"{SERVO_API_URL}/status",
-                        timeout=aiohttp.ClientTimeout(total=0.3)) as resp:
-                    if resp.status == 200:
-                        status = await resp.json()
-                        servo_angle = status.get('current_position')
-            except Exception:
-                pass  # relative_position_deg will be null this iteration
-
-            # 4. Process detections above confidence threshold
+            # 3. Process detections above confidence threshold
             detections: List[Detection] = []
             for d in yolo_result.get('detections', []):
                 if d['confidence'] < DETECTION_CONFIDENCE_MIN:
@@ -134,13 +121,11 @@ async def _inference_loop() -> None:
                 except Exception as e:
                     logger.warning(f"Depth query failed: {e}")
 
-                # Angular offset of object from rover forward axis
-                # positive = right of rover forward, negative = left
-                relative_position_deg: Optional[float] = None
-                if servo_angle is not None:
-                    head_offset_deg = SERVO_DIR * (servo_angle - SERVO_CENTER)
-                    pixel_offset_deg = (0.5 - centroid_x_norm) * CAMERA_FOV
-                    relative_position_deg = head_offset_deg + pixel_offset_deg
+                # Angular offset of object from rover forward axis (pixel-based only).
+                # positive = right of rover forward, negative = left.
+                # Convention: centroid_x_norm is inverted (1 - raw), so
+                #   centroid_x_norm < 0.5 → target right of center → positive deg.
+                relative_position_deg = (0.5 - centroid_x_norm) * CAMERA_FOV
 
                 detections.append(Detection(
                     label=d['label'],
@@ -151,7 +136,7 @@ async def _inference_loop() -> None:
                     relative_position_deg=relative_position_deg,
                 ))
 
-            # 5. Toggle depth saving on camera server
+            # 4. Toggle depth saving on camera server
             try:
                 await session.post(
                     f"{CAMERA_SERVER_URL}/depth-saving",
@@ -159,11 +144,10 @@ async def _inference_loop() -> None:
             except Exception:
                 pass
 
-            # 6. Write to cache
+            # 5. Write to cache
             new_result = DetectionResult(
                 timestamp=time.time(),
                 frame_ts=frame_ts,
-                servo_angle=servo_angle,
                 detections=detections,
             )
             async with _cache_lock:
@@ -191,7 +175,6 @@ async def get_detection():
     return {
         "timestamp": result.timestamp,
         "frame_ts": result.frame_ts,
-        "servo_angle": result.servo_angle,
         "detections": [asdict(d) for d in result.detections],
     }
 
