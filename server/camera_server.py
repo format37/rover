@@ -28,6 +28,14 @@ ESTIMATED_RGB_SIZE = 150_000       # ~150KB per JPEG at quality 85, 848×480
 ESTIMATED_DEPTH_SIZE = 820_000     # ~820KB per .npy (848×480 uint16)
 DISK_HEADROOM = 500_000_000        # Reserve 500MB free
 
+# Cliff detection: sample the bottom CLIFF_BOTTOM_FRAC of the depth frame.
+# If the median depth of valid pixels there exceeds CLIFF_DEPTH_THRESHOLD metres
+# (floor is farther away than expected → edge/cliff), or too few valid pixels
+# are returned (surface out of range), a cliff is reported.
+CLIFF_BOTTOM_FRAC = 0.30       # Bottom 30% of rows to sample
+CLIFF_DEPTH_THRESHOLD = 0.8    # Metres; floor closer than this is normal ground
+CLIFF_VALID_FRAC_MIN = 0.10    # Fraction of region pixels that must be valid
+
 
 class DistanceRequest(BaseModel):
     bbox: List[float] = Field(..., min_length=4, max_length=4, description="[x, y, w, h]")
@@ -69,6 +77,7 @@ class CameraManager:
         self.frame_count: int = 0
         self.saving_active: bool = False
         self.capture_fps: float = 0.0
+        self.cliff_detected: bool = False
 
         # Write queue — large enough to buffer ~2s of capture at 60fps
         self._write_queue: queue.Queue = queue.Queue(maxsize=120)
@@ -155,12 +164,14 @@ class CameraManager:
             jpeg_bytes = jpeg_buf.tobytes()
 
             timestamp = self._make_timestamp()
+            cliff = self._detect_cliff(depth_image)
 
             with self._lock:
                 self.latest_color_image = color_image
                 self.latest_depth_image = depth_image
                 self.latest_jpeg = jpeg_bytes
                 self.latest_timestamp = timestamp
+                self.cliff_detected = cliff
                 saving = self.saving_active
                 count = self.frame_count
 
@@ -210,6 +221,22 @@ class CameraManager:
                     print(f"Frame limit reached ({self.frame_limit}), saving stopped")
 
         print("Writer thread stopped")
+
+    def _detect_cliff(self, depth_image: np.ndarray) -> bool:
+        """Return True if the lower portion of the depth frame suggests a cliff.
+
+        Samples the bottom CLIFF_BOTTOM_FRAC rows. If valid pixels are too
+        sparse or their median distance exceeds CLIFF_DEPTH_THRESHOLD, the
+        rover is likely at an edge.
+        """
+        h = depth_image.shape[0]
+        y_start = int(h * (1.0 - CLIFF_BOTTOM_FRAC))
+        region = depth_image[y_start:, :]
+        valid = region[region > 0]
+        if len(valid) < region.size * CLIFF_VALID_FRAC_MIN:
+            return True  # too few valid readings → surface out of range
+        median_m = float(np.median(valid)) * self.depth_scale
+        return median_m > CLIFF_DEPTH_THRESHOLD
 
     def get_distance(self, bbox: List[float], shrink: float = 0.2) -> Optional[float]:
         with self._lock:
@@ -341,6 +368,18 @@ async def get_distance(req: DistanceRequest):
         timestamp = camera_manager.latest_timestamp
 
     return {"distance": distance, "timestamp": timestamp}
+
+
+@app.get("/cliff")
+async def get_cliff():
+    if not camera_manager:
+        raise HTTPException(status_code=500, detail="Camera not initialized")
+
+    with camera_manager._lock:
+        return {
+            "cliff": camera_manager.cliff_detected,
+            "timestamp": camera_manager.latest_timestamp,
+        }
 
 
 @app.get("/session")

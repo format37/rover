@@ -36,6 +36,7 @@ STATE_LOST = "lost"
 STATE_SEARCHING = "searching"
 STATE_ORIENTING = "orienting"
 STATE_BACKING = "backing"
+STATE_CLIFF = "cliff"
 
 # Search rotation sequence: right(0), left(1), right(0), then repeat
 _SEARCH_SEQUENCE = [0, 1, 0]
@@ -69,15 +70,27 @@ def get_state():
     return _state
 
 
-def update(detection, x_normalized, min_distance=None):
+def update(detection, x_normalized, min_distance=None, cliff=False):
     """Main tick — called every frame.
 
     detection: dict with 'bbox', 'confidence', 'relative_position_deg', 'distance',
                'centroid_x_norm' (from detection server) or None
     x_normalized: object centroid 0-1 or None
     min_distance: closest detected object distance (meters) across all detections, or None
+    cliff: True if camera server reports an edge/cliff ahead
     Returns dict with 'state', 'action', 'distance'.
     """
+    # HIGHEST priority: cliff ahead → stop immediately, stay stopped until clear
+    if cliff:
+        if _state != STATE_CLIFF:
+            _enter_state(STATE_CLIFF)
+            _stop_tracks()
+        return _result("cliff_stop")
+
+    # Cliff cleared: resume
+    if _state == STATE_CLIFF:
+        _enter_state(STATE_LOST)
+
     # Collision override: any detected object closer than BACK_DISTANCE → back up immediately
     if min_distance is not None and min_distance <= BACK_DISTANCE:
         if _state != STATE_BACKING:

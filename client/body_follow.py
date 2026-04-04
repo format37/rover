@@ -75,7 +75,7 @@ async def run(targets: list):
     async with aiohttp.ClientSession() as session:
         try:
             while True:
-                # Fetch latest detection from detection server (non-blocking)
+                # Fetch latest detection and cliff status concurrently
                 try:
                     async with session.get(f"{DETECTION_SERVER_URL}/detection") as resp:
                         if resp.status != 200:
@@ -87,6 +87,12 @@ async def run(targets: list):
                     await asyncio.sleep(0.1)
                     continue
 
+                try:
+                    async with session.get(f"{CAMERA_SERVER_URL}/cliff") as resp:
+                        cliff_detected = (await resp.json()).get('cliff', False) if resp.status == 200 else False
+                except Exception:
+                    cliff_detected = False
+
                 age_ms = (time.time() - det_result['timestamp']) * 1000
                 all_detections = det_result['detections'] if age_ms <= DETECTION_MAX_AGE_MS else []
                 selected = select_target(all_detections, targets)
@@ -95,15 +101,18 @@ async def run(targets: list):
                              if d.get('distance') is not None]
                 min_distance = min(distances) if distances else None
 
+                if cliff_detected:
+                    logger.warning("Cliff detected — stopping")
+
                 if selected:
                     x_normalized = selected['centroid_x_norm']
                     logger.info(f"'{selected['label']}': conf={selected['confidence']:.2f}, "
                                 f"x={x_normalized:.2f}")
                     result = chase.update(detection=selected, x_normalized=x_normalized,
-                                          min_distance=min_distance)
+                                          min_distance=min_distance, cliff=cliff_detected)
                 else:
                     result = chase.update(detection=None, x_normalized=None,
-                                          min_distance=min_distance)
+                                          min_distance=min_distance, cliff=cliff_detected)
 
                 # Log
                 jsonl_file.write(json.dumps({
