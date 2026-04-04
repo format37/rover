@@ -45,3 +45,7 @@ sshpass -p 3212321 ssh $SSH_OPTS "$JETSON" \
 echo "==> Done: $LOCAL_DIR/$SESSION"
 echo "Files: $(find "$LOCAL_DIR/$SESSION" -type f | wc -l)"
 echo "Size:  $(du -sh "$LOCAL_DIR/$SESSION" | cut -f1)"
+
+echo "==> Composing video..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+python "$SCRIPT_DIR/compose_video.py" "$LOCAL_DIR/$SESSION"
