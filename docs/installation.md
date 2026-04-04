@@ -93,3 +93,9 @@ python3 -m pip install pyrealsense2
 cd ~/projects/librealsense/wrappers/python/examples
 python3.8 opencv_viewer_example.py
 ```
+
+### Wi-Fi configuration
+
+```bash
+sudo nmcli device wifi connect "YOUR_HOTSPOT_SSID" password "YOUR_PASSWORD"
+```

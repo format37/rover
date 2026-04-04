@@ -6,53 +6,42 @@ The detection server decouples YOLO inference from the control loop — the clie
 
 ## Installation
 
-> **Required before first run:** Follow [`docs/installation.md`](docs/installation.md) to set up YOLO+OpenCV GPU support and the RealSense depth camera on Jetson Nano. These cannot be installed via pip alone — both require source builds for the ARM architecture.
+> **Required before first run:** Follow [`docs/installation.md`](docs/installation.md) to set up YOLO+OpenCV GPU support, the RealSense depth camera, and Wi-Fi on Jetson Nano. These cannot be installed via pip alone — both require source builds for the ARM architecture.
 
 ```bash
+cd ~/projects
+git clone https://github.com/format37/rover.git
+cd rover
 sudo apt-get install python3-setuptools python3-pip libjpeg-dev zlib1g-dev
 ```
 
-## Running
+## Configuration
 
-### Quick start (recommended)
+### `targets.yaml` — chase targets
+
+Defines which objects the rover tracks, in priority order. When multiple targets are visible, the rover follows the highest-priority group; within a group it picks the highest confidence detection.
+
+```yaml
+targets:
+  - name: cat
+    priority: 0        # 0 = highest priority
+    confidence: 0.8    # minimum detection confidence (0.0–1.0)
+  - name: person
+    priority: 1
+    confidence: 0.8
+```
+
+### `server/hud_config.yaml` — video HUD overlay
+
+Controls the visual overlay rendered by `compose_video.py` — track speed indicators, depth projection map, 3D mesh style, colors, font, and layout. Edit before composing video to adjust the HUD appearance.
+
+## Running
 
 ```bash
 cd ~/projects/rover/
-./start.sh person      # starts all 5 processes, waits for readiness, tails log
-./stop.sh              # kills all 5 cleanly
+./start.sh      # starts all 5 processes, waits for readiness, tails log
+./stop.sh       # kills all 5 cleanly
 ```
-
-### Manual (5 terminals, in order)
-
-```bash
-# Terminal 1: Camera server — RealSense capture + frame serving
-cd ~/projects/rover/server/
-python3.8 camera_server.py
-
-# Terminal 2: YOLO server — GPU inference (python3.6 required for Jetson GPU)
-cd ~/projects/rover/server/
-python3.6 yolo_server.py
-
-# Terminal 3: Track API — I2C hardware control (PCA9685)
-cd ~/projects/rover/server/
-python3.8 servo_api.py
-
-# Terminal 4: Detection server — async inference cache
-cd ~/projects/rover/server/
-python3.8 detection_server.py
-
-# Terminal 5: Client — behavior logic
-cd ~/projects/rover/client/
-python3.8 body_follow.py --label person
-```
-
-Start in order: camera → yolo → tracks → detection → client.
-After YOLO is ready, call `curl -X POST http://localhost:8080/start-saving` to begin saving RGB frames (done automatically by `start.sh`).
-
-### camera_server.py CLI options
-- `--session-dir sessions` — base directory for session folders
-- `--jpeg-quality 95` — JPEG encoding quality
-- `--frame-limit N` — override auto-computed frame limit (default: computed from free disk space)
 
 ## Session file layout
 
@@ -64,37 +53,26 @@ sessions/<timestamp>/
   servo/        # state.jsonl (written by servo_api.py)
 ```
 
-## API Endpoints
+## Downloading sessions and composing video
 
-### Detection server (:8090)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/detection` | GET | Last cached inference result. Returns detections with `label`, `confidence`, `bbox`, `centroid_x_norm`, `distance`, `relative_position_deg` |
-| `/status` | GET | `loop_fps`, `last_result_age_ms`, `cache_has_detections` |
+Run on the **local machine** after a session on the rover:
 
-### Camera server (:8080)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/frame` | GET | Latest JPEG frame. Headers: `X-Timestamp`, `X-Frame-Number`, `X-Saving-Active` |
-| `/distance` | POST | Depth distance for a bbox. Body: `{"bbox": [x,y,w,h], "shrink": 0.2}`. Returns: `{"distance": 1.23}` |
-| `/session` | GET | Session metadata: path, yolo_dir, servo_dir, frame_count, saving_active |
-| `/status` | GET | Health check: capture_fps, frame_count, saving status |
-| `/start-saving` | POST | Enable RGB frame saving (called by start.sh after YOLO warmup) |
-| `/depth-saving` | POST | `?enabled=true\|false` — toggle depth saving (called by detection_server) |
+```bash
+cd ~/projects/rover/server/
 
-### Track API (:8000)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/tracks/move` | POST | Move both tracks. Body: `{"left_speed": 0.1, "left_dir": 0, "right_speed": 0.1, "right_dir": 1, "duration": 2}` |
-| `/tracks/rotate` | POST | Rotate in place. Body: `{"speed": 0.05, "direction": 1, "duration": 2}` |
-| `/tracks/stop` | POST | Stop both tracks |
-| `/status` | GET | Current track state |
+# Download the most recent session (archives on Jetson, downloads, extracts, auto-composes video)
+bash download_session.sh
 
-### YOLO server (:8765)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/detect/` | POST | Send JPEG, get bounding boxes. Form field: `file` |
-| `/ready` | GET | Readiness probe (triggers warmup inference if needed) |
+# Or download a specific session by name
+bash download_session.sh <session_name>
+```
+
+`download_session.sh` will:
+1. Archive the session on the Jetson
+2. Download and extract it to `server/sessions/<session_name>/`
+3. Copy runtime logs into `sessions/<session_name>/logs/`
+4. Clean up the archive on the Jetson
+5. Auto-run `compose_video.py` to render the annotated video with HUD overlay
 
 ## Track directions
 
@@ -103,10 +81,4 @@ Forward:       track0 dir=0, track1 dir=1
 Backward:      track0 dir=1, track1 dir=0
 Rotate left:   both dir=1
 Rotate right:  both dir=0
-```
-
-## Network
-
-```bash
-sudo nmcli device wifi connect "YOUR_HOTSPOT_SSID" password "YOUR_PASSWORD"
 ```
