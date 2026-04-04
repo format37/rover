@@ -58,12 +58,19 @@ class TrackController:
         self.right_dir = 0
         print("Track controller initialized")
 
+    # PCA9685 valid frequency range. Exceeding PCA_FREQ_MAX causes a ValueError
+    # inside the adafruit library (prescaler underflows), which leaves the board
+    # in sleep mode permanently until the next successful frequency write.
+    _PCA_FREQ_MIN = 24
+    _PCA_FREQ_MAX = 1526
+
     def _set_track(self, track: int, speed: float, direction: int):
         """Set individual track. speed 0-1, direction 0 or 1."""
         if speed > 0:
-            frequency = speed * 2300
+            frequency = max(self._PCA_FREQ_MIN,
+                            min(self._PCA_FREQ_MAX, int(speed * 2300)))
             dir_val = direction * 0xFFFF
-            self.pca[track].frequency = int(frequency)
+            self.pca[track].frequency = frequency
             self.pca[track].channels[1].duty_cycle = int(dir_val)
             self.pca[track].channels[0].duty_cycle = 0x7FFF  # go
         else:
