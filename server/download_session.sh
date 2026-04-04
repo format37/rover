@@ -7,7 +7,7 @@ set -e
 
 JETSON="jetson@192.168.0.212"
 SSH_OPTS="-o PubkeyAuthentication=no"
-REMOTE_DIR="/home/jetson/projects/rover/object_chaser/server"
+REMOTE_DIR="/home/jetson/projects/rover/server"
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)/sessions"
 
 mkdir -p "$LOCAL_DIR"
@@ -33,7 +33,7 @@ tar -xzf "$LOCAL_DIR/$ARCHIVE" -C "$LOCAL_DIR"
 rm "$LOCAL_DIR/$ARCHIVE"
 
 echo "==> Downloading logs..."
-REMOTE_LOG_DIR="/home/jetson/projects/rover/object_chaser/logs"
+REMOTE_LOG_DIR="/home/jetson/projects/rover/logs"
 LOCAL_LOG_DIR="$LOCAL_DIR/$SESSION/logs"
 mkdir -p "$LOCAL_LOG_DIR"
 sshpass -p 3212321 scp $SSH_OPTS "$JETSON:$REMOTE_LOG_DIR/*.log" "$LOCAL_LOG_DIR/" 2>/dev/null || echo "  (no logs found)"
