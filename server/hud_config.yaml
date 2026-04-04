@@ -48,8 +48,26 @@ hud:
     color_mid: [50, 170, 50]      # medium green
     color_near: [100, 255, 120]   # light green
 
+  # 3D Poisson mesh overlay (replaces 2D Delaunay when enabled)
+  # All colors are BGR (blue, green, red) — matching OpenCV convention
+  mesh3d:
+    enabled: true          # set true to use 3D reconstruction instead of 2D Delaunay
+    method: ball_pivot     # "ball_pivot" (~0.01s/frame) or "poisson" (~40s/frame, higher quality)
+    poisson_depth: 6        # octree depth — lower=fewer faces/faster (6→~14k, 8→~28k faces)
+    simplify: 2000             # quadric decimation target face count (0=disabled, e.g. 2000)
+
+    # Inner fill — gradient from nearest to farthest depth (BGR)
+    fill_alpha: 0.0                     # 0.0 = fully transparent (wireframe-only)
+    fill_color_near: [255, 255,   0]    # cyan
+    fill_color_mid:  [255, 128,   0]    # blue
+    fill_color_far:  [180,  64,  64]    # dark blue
+
+    # Wireframe edges (BGR)
+    edge_color: [0, 220, 255]           # gold
+    edge_alpha: 0.9                     # edge opacity
+
   # Debug: show source filenames/timestamps in bottom-left
-  debug_sources: true
+  debug_sources: false
 
   # Log lines overlay: show most recent log line per source at top-left
   # Each name maps to <session>/logs/<name>.log

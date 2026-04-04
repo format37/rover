@@ -13,7 +13,7 @@ import os
 import re
 import sys
 import time
-from multiprocessing import Pool
+from multiprocessing import Pool, get_context
 from pathlib import Path
 
 import cv2
@@ -217,15 +217,17 @@ def _mesh3d_intrinsics(dep_w: int, dep_h: int) -> tuple:
 def _mesh3d_from_detection(depth_image: np.ndarray, det: dict,
                            dep_w: int, dep_h: int,
                            img_w: int, img_h: int,
+                           method: str = "ball_pivot",
                            poisson_depth: int = 8, simplify: int = 0):
     """
-    Reconstruct a 3D mesh for one YOLO detection using Poisson surface reconstruction.
+    Reconstruct a 3D mesh for one YOLO detection.
 
     Returns (mesh, pts2d, clip_rect_rgb) or None on failure.
     Requires open3d; falls back gracefully to None if unavailable or too few points.
 
     Args:
-        poisson_depth: Octree depth (lower = fewer polygons/faster; 8 default).
+        method:        'ball_pivot' (default, ~0.01s/frame) or 'poisson' (~40s/frame).
+        poisson_depth: Octree depth for Poisson (lower = fewer polygons/faster; 8 default).
         simplify:      If >0, apply quadric decimation to this many triangles.
     """
     if not _OPEN3D_AVAILABLE:
@@ -272,6 +274,14 @@ def _mesh3d_from_detection(depth_image: np.ndarray, det: dict,
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
+
+    # Voxel downsample before Poisson to keep point count manageable.
+    # A 3cm grid on a ~1m object gives ~30×30=900 surface points — plenty for
+    # depth=6 Poisson — and reduces reconstruction time from minutes to seconds.
+    avg_z = float(np.mean(points[:, 2]))
+    voxel_size = max(0.01, avg_z * 0.025)   # ~2.5% of object distance, min 1cm
+    pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+
     pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
     if len(pcd.points) < 10:
         return None
@@ -282,14 +292,22 @@ def _mesh3d_from_detection(depth_image: np.ndarray, det: dict,
     pcd.orient_normals_towards_camera_location(np.array([0.0, 0.0, 0.0]))
 
     try:
-        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-            pcd, depth=poisson_depth, width=0, scale=1.1, linear_fit=False
-        )
+        if method == "ball_pivot":
+            radii = o3d.utility.DoubleVector([
+                voxel_size * 1.5, voxel_size * 3.0, voxel_size * 6.0
+            ])
+            mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+                pcd, radii
+            )
+        else:  # poisson
+            mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+                pcd, depth=poisson_depth, width=0, scale=1.1, linear_fit=False
+            )
+            densities = np.asarray(densities)
+            mesh.remove_vertices_by_mask(densities < np.quantile(densities, 0.05))
     except Exception:
         return None
 
-    densities = np.asarray(densities)
-    mesh.remove_vertices_by_mask(densities < np.quantile(densities, 0.05))
     if len(mesh.triangles) == 0:
         return None
 
@@ -324,13 +342,18 @@ def _mesh3d_from_detection(depth_image: np.ndarray, det: dict,
 
 
 def _mesh3d_render(frame: np.ndarray, mesh, pts2d: np.ndarray,
-                   clip_rect: tuple, label: str, conf: float,
-                   dist_m) -> np.ndarray:
+                   clip_rect: tuple, label: str, conf: float, dist_m,
+                   fill_alpha: float = 0.0,
+                   fill_color_near: tuple = (255, 255, 0),
+                   fill_color_mid:  tuple = (255, 128, 0),
+                   fill_color_far:  tuple = (180,  64, 64),
+                   edge_color: tuple = (0, 220, 255),
+                   edge_alpha: float = 0.9) -> np.ndarray:
     """
     Render a 3D mesh onto the frame in hologram style.
 
-    Uses painter's algorithm (back-to-front), depth-based cyan/blue fill,
-    gold wireframe, all clipped to the detection bbox.
+    All colors are BGR tuples (matching OpenCV / hud_config convention).
+    fill_alpha=0 renders wireframe-only (transparent interior).
     """
     verts = np.asarray(mesh.vertices)
     faces = np.asarray(mesh.triangles)
@@ -345,54 +368,55 @@ def _mesh3d_render(frame: np.ndarray, mesh, pts2d: np.ndarray,
     z_far  = float(np.percentile(face_z, 95))
     z_range = max(z_far - z_near, 0.001)
 
-    # --- Fill pass (painter's algorithm, back→front) ---
-    overlay = frame.copy()
-    for fi in np.argsort(face_z)[::-1]:
-        face = faces[fi]
-        tri = pts2d[face]
-        if np.any(verts[face, 2] <= 0):
-            continue
-        if np.all(tri[:, 0] < -100) or np.all(tri[:, 0] > w + 100):
-            continue
-        if np.all(tri[:, 1] < -100) or np.all(tri[:, 1] > h + 100):
-            continue
-        t = np.clip((face_z[fi] - z_near) / z_range, 0.0, 1.0)
-        if t < 0.5:
-            f = t / 0.5
-            rgb = np.array([0, 255, 255]) * (1 - f) + np.array([0, 128, 255]) * f
-        else:
-            f = (t - 0.5) / 0.5
-            rgb = np.array([0, 128, 255]) * (1 - f) + np.array([64, 64, 180]) * f
-        cv2.fillPoly(overlay, [tri.astype(np.int32)], (int(rgb[2]), int(rgb[1]), int(rgb[0])))
+    c_near = np.array(fill_color_near, dtype=np.float32)
+    c_mid  = np.array(fill_color_mid,  dtype=np.float32)
+    c_far  = np.array(fill_color_far,  dtype=np.float32)
 
-    # Blend fill within bbox only
-    fill_alpha = 0.35
     clip_mask = np.zeros((h, w), dtype=bool)
     clip_mask[cy1:cy2, cx1:cx2] = True
-    blended = cv2.addWeighted(frame, 1 - fill_alpha, overlay, fill_alpha, 0)
-    result = frame.copy()
-    result[clip_mask] = blended[clip_mask]
 
-    # --- Wireframe (gold), clipped to bbox ---
-    wire_layer = np.zeros_like(frame)
-    edge_set = set()
-    for face in faces:
-        for i in range(3):
-            a, b = int(face[i]), int(face[(i + 1) % 3])
-            edge_set.add((min(a, b), max(a, b)))
-    for a, b in edge_set:
-        if verts[a, 2] <= 0 or verts[b, 2] <= 0:
-            continue
-        pa = pts2d[a].astype(np.int32)
-        pb = pts2d[b].astype(np.int32)
-        cv2.line(wire_layer, tuple(pa), tuple(pb), (0, 220, 255), 1, cv2.LINE_AA)
+    # --- Fill pass (painter's algorithm, back→front) ---
+    if fill_alpha > 0.0:
+        overlay = frame.copy()
+        for fi in np.argsort(face_z)[::-1]:
+            face = faces[fi]
+            tri = pts2d[face]
+            if np.any(verts[face, 2] <= 0):
+                continue
+            if np.all(tri[:, 0] < -100) or np.all(tri[:, 0] > w + 100):
+                continue
+            if np.all(tri[:, 1] < -100) or np.all(tri[:, 1] > h + 100):
+                continue
+            t = np.clip((face_z[fi] - z_near) / z_range, 0.0, 1.0)
+            f = (t / 0.5) if t < 0.5 else ((t - 0.5) / 0.5)
+            bgr = (c_near * (1 - f) + c_mid * f) if t < 0.5 else (c_mid * (1 - f) + c_far * f)
+            cv2.fillPoly(overlay, [tri.astype(np.int32)],
+                         (int(bgr[0]), int(bgr[1]), int(bgr[2])))
+        blended = cv2.addWeighted(frame, 1 - fill_alpha, overlay, fill_alpha, 0)
+        result = frame.copy()
+        result[clip_mask] = blended[clip_mask]
+    else:
+        result = frame.copy()
 
-    wire_mask = (wire_layer.sum(axis=2) > 0) & clip_mask
-    wire_alpha = 0.9
-    result[wire_mask] = (
-        result[wire_mask].astype(np.float32) * (1 - wire_alpha)
-        + wire_layer[wire_mask].astype(np.float32) * wire_alpha
-    ).astype(np.uint8)
+    # --- Wireframe, clipped to bbox ---
+    if edge_alpha > 0.0:
+        wire_layer = np.zeros_like(frame)
+        edge_set = set()
+        for face in faces:
+            for i in range(3):
+                a, b = int(face[i]), int(face[(i + 1) % 3])
+                edge_set.add((min(a, b), max(a, b)))
+        for a, b in edge_set:
+            if verts[a, 2] <= 0 or verts[b, 2] <= 0:
+                continue
+            pa = pts2d[a].astype(np.int32)
+            pb = pts2d[b].astype(np.int32)
+            cv2.line(wire_layer, tuple(pa), tuple(pb), edge_color, 1, cv2.LINE_AA)
+        wire_mask = (wire_layer.sum(axis=2) > 0) & clip_mask
+        result[wire_mask] = (
+            result[wire_mask].astype(np.float32) * (1 - edge_alpha)
+            + wire_layer[wire_mask].astype(np.float32) * edge_alpha
+        ).astype(np.uint8)
 
     # --- Label ---
     text = f"{label} {conf:.0%}"
@@ -414,7 +438,7 @@ def _mesh3d_render(frame: np.ndarray, mesh, pts2d: np.ndarray,
 
 def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                        detections: list, depth_scale: tuple,
-                       mesh_cfg: dict = None, use_mesh3d: bool = False) -> np.ndarray:
+                       mesh_cfg: dict = None) -> np.ndarray:
     """Draw Tron-style adaptive triangle mesh on detected objects."""
     img_h, img_w = frame.shape[:2]
     dep_h, dep_w = depth_image.shape[:2]
@@ -458,15 +482,26 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
         if x2 - x1 < 20 or y2 - y1 < 20:
             continue
 
-        # --- 3D mesh path (--mesh3d) ---
-        if use_mesh3d:
-            result = _mesh3d_from_detection(depth_image, det, dep_w, dep_h, img_w, img_h,
-                                            poisson_depth=_worker_mesh3d_depth,
-                                            simplify=_worker_mesh3d_simplify)
+        # --- 3D mesh path (mesh3d.enabled in hud_config) ---
+        if _worker_mesh3d_cfg.get("enabled", False):
+            m3 = _worker_mesh3d_cfg
+            result = _mesh3d_from_detection(
+                depth_image, det, dep_w, dep_h, img_w, img_h,
+                method=m3.get("method", "ball_pivot"),
+                poisson_depth=m3.get("poisson_depth", 8),
+                simplify=m3.get("simplify", 0),
+            )
             if result is not None:
                 mesh3d, pts2d, clip_rect = result
-                frame = _mesh3d_render(frame, mesh3d, pts2d, clip_rect,
-                                       label, conf, det.get("distance"))
+                frame = _mesh3d_render(
+                    frame, mesh3d, pts2d, clip_rect, label, conf, det.get("distance"),
+                    fill_alpha=m3.get("fill_alpha", 0.0),
+                    fill_color_near=tuple(m3.get("fill_color_near", [255, 255, 0])),
+                    fill_color_mid =tuple(m3.get("fill_color_mid",  [255, 128, 0])),
+                    fill_color_far =tuple(m3.get("fill_color_far",  [180,  64, 64])),
+                    edge_color=tuple(m3.get("edge_color", [0, 220, 255])),
+                    edge_alpha=m3.get("edge_alpha", 0.9),
+                )
                 continue  # skip Delaunay for this detection
             # fallthrough to Delaunay if reconstruction failed
 
@@ -607,17 +642,13 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
 # -- Multiprocessing worker --
 
 _worker_hud_cfg = None
-_worker_use_mesh3d = False
-_worker_mesh3d_depth = 8
-_worker_mesh3d_simplify = 0
+_worker_mesh3d_cfg = {}   # the hud_config mesh3d section, or {} if disabled
 
 
-def _init_worker(hud_cfg, use_mesh3d=False, mesh3d_depth=8, mesh3d_simplify=0):
-    global _worker_hud_cfg, _worker_use_mesh3d, _worker_mesh3d_depth, _worker_mesh3d_simplify
+def _init_worker(hud_cfg, mesh3d_cfg=None):
+    global _worker_hud_cfg, _worker_mesh3d_cfg
     _worker_hud_cfg = hud_cfg
-    _worker_use_mesh3d = use_mesh3d
-    _worker_mesh3d_depth = mesh3d_depth
-    _worker_mesh3d_simplify = mesh3d_simplify
+    _worker_mesh3d_cfg = mesh3d_cfg or {}
 
 
 def _draw_debug_sources(frame, debug_info):
@@ -687,7 +718,7 @@ def _process_frame(args):
             mesh_cfg = _worker_hud_cfg.get("mesh") if _worker_hud_cfg else None
             frame = draw_depth_overlay(frame, depth_image, detections,
                                        (depth_image.shape[1] / w, depth_image.shape[0] / h),
-                                       mesh_cfg, use_mesh3d=_worker_use_mesh3d)
+                                       mesh_cfg)
 
     if _worker_hud_cfg:
         hud_state = track_state or {"left_speed": 0, "left_dir": 0,
@@ -717,19 +748,9 @@ def main():
     parser.add_argument("--workers", type=int, default=0,
                         help="Parallel workers (default: auto)")
     parser.add_argument("--mesh3d", action="store_true",
-                        help="Use 3D Poisson mesh reconstruction instead of 2D Delaunay overlay "
-                             "(requires open3d; slow — best used with --frame for single frames)")
-    parser.add_argument("--mesh3d-depth", type=int, default=8,
-                        help="Poisson octree depth for --mesh3d (lower=fewer polygons/faster; "
-                             "depth=6→~14k, depth=8→~28k faces; default: 8)")
-    parser.add_argument("--mesh3d-simplify", type=int, default=0,
-                        help="Quadric decimation target for --mesh3d: reduce mesh to this many "
-                             "triangles after reconstruction (0=disabled, e.g. 2000 for low-poly)")
+                        help="Force-enable 3D mesh overlay regardless of hud_config.yaml setting "
+                             "(requires open3d; configure via mesh3d section in hud_config.yaml)")
     args = parser.parse_args()
-
-    if args.mesh3d and not _OPEN3D_AVAILABLE:
-        print("WARNING: --mesh3d requires open3d (pip install open3d). Falling back to Delaunay.")
-        args.mesh3d = False
 
     session = Path(args.session)
     rgb_dir = session / "rgb"
@@ -838,8 +859,13 @@ def main():
         print(f"YOLO:  {debug_info['yolo']}  ({len(detections)} detections)")
         print(f"Track: {debug_info['track']}")
 
-        _init_worker(hud_cfg, use_mesh3d=args.mesh3d,
-                     mesh3d_depth=args.mesh3d_depth, mesh3d_simplify=args.mesh3d_simplify)
+        mesh3d_cfg = dict(hud_cfg.get("mesh3d", {})) if hud_cfg else {}
+        if args.mesh3d:
+            mesh3d_cfg["enabled"] = True
+        if mesh3d_cfg.get("enabled") and not _OPEN3D_AVAILABLE:
+            print("WARNING: mesh3d requires open3d. Falling back to Delaunay.")
+            mesh3d_cfg["enabled"] = False
+        _init_worker(hud_cfg, mesh3d_cfg=mesh3d_cfg)
         frame = _process_frame((rgb_path, depth_path, detections, track_state, debug_info))
 
         out_base = args.output or f"/tmp/frame_{depth_name}.png"
@@ -968,12 +994,31 @@ def main():
     # Parallel processing
     n_workers = args.workers if args.workers > 0 else min(os.cpu_count() or 4, 8)
     n_frames = len(frame_args)
-    print(f"Workers: {n_workers}")
+
+    mesh3d_cfg = dict(hud_cfg.get("mesh3d", {})) if hud_cfg else {}
+    if args.mesh3d:
+        mesh3d_cfg["enabled"] = True
+    if mesh3d_cfg.get("enabled") and not _OPEN3D_AVAILABLE:
+        print("WARNING: mesh3d requires open3d. Falling back to Delaunay.")
+        mesh3d_cfg["enabled"] = False
+
+    if mesh3d_cfg.get("enabled"):
+        # Open3D uses TBB internally. Python's default fork-based multiprocessing
+        # copies TBB's thread state into child processes, causing a deadlock on
+        # the first Open3D call in each worker. 'spawn' starts a clean interpreter
+        # per worker, avoiding this entirely.
+        # Also cap workers to avoid N_workers × Open3D_threads CPU saturation.
+        mp_ctx = get_context("spawn")
+        n_workers = min(n_workers, max(1, (os.cpu_count() or 4) // 2))
+        print(f"Workers: {n_workers} (spawn context — mesh3d enabled)")
+    else:
+        mp_ctx = get_context("fork")
+        print(f"Workers: {n_workers}")
+
     t_start = time.time()
 
-    with Pool(n_workers, initializer=_init_worker,
-              initargs=(hud_cfg, args.mesh3d,
-                        args.mesh3d_depth, args.mesh3d_simplify)) as pool:
+    with mp_ctx.Pool(n_workers, initializer=_init_worker,
+                     initargs=(hud_cfg, mesh3d_cfg)) as pool:
         for i, frame in enumerate(pool.imap(_process_frame, frame_args, chunksize=4)):
             if frame is not None:
                 writer.write(frame)
