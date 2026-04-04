@@ -43,9 +43,6 @@ STATE_SEARCHING = "searching"
 STATE_ORIENTING = "orienting"
 STATE_BACKING = "backing"
 
-# Search rotation sequence: right(0), left(1), right(0), then repeat
-_SEARCH_SEQUENCE = [0, 1, 0]
-
 # Module state
 _api_url = ''
 _state = STATE_LOST
@@ -53,9 +50,11 @@ _current_speed = 0.0
 _last_detection_time = None
 _search_sweep_index = 0
 _search_sweep_end = None    # None = sweep not yet started
+_search_sequence = [0, 1, 0]  # rebuilt at each _search_start(); right(0)/left(1)
 _orient_phase = "rotating"  # "rotating" | "verifying"
 _orient_pivot_end = None
 _tracks_moving = False
+_last_positions = {}  # label -> last seen x_normalized (all target labels)
 
 
 def init(api_url='http://localhost:8000'):
@@ -64,7 +63,18 @@ def init(api_url='http://localhost:8000'):
     _state = STATE_LOST
     _current_speed = 0.0
     _last_detection_time = time.monotonic()
+    _last_positions.clear()
     logger.info("Chase initialized")
+
+
+def record_sighting(label, x_normalized):
+    """Record the last-seen x_normalized for a target label.
+
+    Called each frame for every valid target detection (not just selected).
+    Used by _search_start() to bias the initial sweep direction toward where
+    targets were last dispersed.
+    """
+    _last_positions[label] = x_normalized
 
 
 def shutdown():
@@ -259,7 +269,7 @@ def _do_searching(detection, x_normalized):
     # Time-based rotation sweep
     now = time.monotonic()
     if _search_sweep_end is None or now >= _search_sweep_end:
-        direction = _SEARCH_SEQUENCE[_search_sweep_index % len(_SEARCH_SEQUENCE)]
+        direction = _search_sequence[_search_sweep_index % len(_search_sequence)]
         duration = SEARCH_SWEEP_DEG / ROTATION_DEG_PER_SEC
         _send_rotate(ROTATION_SPEED, direction, duration)
         _search_sweep_end = now + duration
@@ -339,8 +349,25 @@ def _orient_start(angle_diff):
 
 
 def _search_start():
-    global _search_sweep_index, _search_sweep_end
+    global _search_sweep_index, _search_sweep_end, _search_sequence
     _search_sweep_index = 0
     _search_sweep_end = None  # triggers immediate first sweep in _do_searching
     _stop_tracks()
-    logger.info("Search: starting right→left→right sweep sequence")
+
+    # Pick initial sweep direction from median of last-seen positions.
+    # x_normalized < 0.5 → target was to the RIGHT (camera mirrored) → rotate right first.
+    # x_normalized >= 0.5 → target was to the LEFT → rotate left first.
+    if _last_positions:
+        vals = sorted(_last_positions.values())
+        median_x = vals[len(vals) // 2]
+        first_dir = 0 if median_x < 0.5 else 1
+    else:
+        first_dir = 0  # no prior sightings: default right
+
+    opp = 1 - first_dir
+    _search_sequence = [first_dir, opp, first_dir]
+    _names = {0: 'right', 1: 'left'}
+    logger.info(
+        f"Search: {_names[first_dir]}→{_names[opp]}→{_names[first_dir]} sweep "
+        f"(last-seen positions: {_last_positions})"
+    )

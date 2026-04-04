@@ -72,6 +72,8 @@ async def run(targets: list):
     jsonl_file = open(f"{yolo_dir}/detections.jsonl", 'a')
     logger.info(f"Logging to {yolo_dir}/detections.jsonl")
 
+    target_map = {t['name']: t for t in targets}
+
     async with aiohttp.ClientSession() as session:
         try:
             while True:
@@ -96,6 +98,14 @@ async def run(targets: list):
                 age_ms = (time.time() - det_result['timestamp']) * 1000
                 all_detections = det_result['detections'] if age_ms <= DETECTION_MAX_AGE_MS else []
                 selected = select_target(all_detections, targets)
+
+                # Record last-seen position for every valid target detection so
+                # _search_start() can bias the initial sweep toward where they were.
+                for d in all_detections:
+                    if (d['label'] in target_map
+                            and d['confidence'] >= target_map[d['label']]['confidence']
+                            and d.get('centroid_x_norm') is not None):
+                        chase.record_sighting(d['label'], d['centroid_x_norm'])
 
                 distances = [d['distance'] for d in all_detections
                              if d.get('distance') is not None]
