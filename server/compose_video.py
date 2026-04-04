@@ -8,6 +8,7 @@ Detected objects get a depth-colormap crop placed above the RGB image with label
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -19,6 +20,17 @@ import cv2
 import numpy as np
 
 from hud import load_hud_config, draw_hud
+
+try:
+    import open3d as o3d
+    _OPEN3D_AVAILABLE = True
+except ImportError:
+    _OPEN3D_AVAILABLE = False
+
+# D435 color-camera FOV at 848×480 (depth stream is aligned to color, then
+# decimation-filtered to 424×240, so these FOV values apply to the depth map).
+_MESH3D_HFOV_DEG = 69.4
+_MESH3D_VFOV_DEG = 42.5
 
 _LOG_DATETIME_RE = re.compile(
     r'^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2}),(\d{3})')
@@ -195,9 +207,214 @@ def _generate_adaptive_points(x1, y1, x2, y2, depth_image, sx, sy,
     return points, point_depths, d_min, d_range
 
 
+def _mesh3d_intrinsics(dep_w: int, dep_h: int) -> tuple:
+    """(fx, fy, cx, cy) for the depth frame at its native resolution."""
+    fx = (dep_w / 2) / math.tan(math.radians(_MESH3D_HFOV_DEG / 2))
+    fy = (dep_h / 2) / math.tan(math.radians(_MESH3D_VFOV_DEG / 2))
+    return fx, fy, dep_w / 2.0, dep_h / 2.0
+
+
+def _mesh3d_from_detection(depth_image: np.ndarray, det: dict,
+                           dep_w: int, dep_h: int,
+                           img_w: int, img_h: int,
+                           poisson_depth: int = 8, simplify: int = 0):
+    """
+    Reconstruct a 3D mesh for one YOLO detection using Poisson surface reconstruction.
+
+    Returns (mesh, pts2d, clip_rect_rgb) or None on failure.
+    Requires open3d; falls back gracefully to None if unavailable or too few points.
+
+    Args:
+        poisson_depth: Octree depth (lower = fewer polygons/faster; 8 default).
+        simplify:      If >0, apply quadric decimation to this many triangles.
+    """
+    if not _OPEN3D_AVAILABLE:
+        return None
+
+    bx, by, bw, bh = [int(v) for v in det["bbox"]]
+    dist_m = det.get("distance")
+
+    sx, sy = dep_w / img_w, dep_h / img_h
+    shrink = 0.10
+    x1d = max(0, int((bx + bw * shrink) * sx))
+    y1d = max(0, int((by + bh * shrink) * sy))
+    x2d = min(dep_w, int((bx + bw * (1 - shrink)) * sx))
+    y2d = min(dep_h, int((by + bh * (1 - shrink)) * sy))
+    if x2d <= x1d or y2d <= y1d:
+        return None
+
+    bbox_mask = np.zeros(depth_image.shape, dtype=bool)
+    bbox_mask[y1d:y2d, x1d:x2d] = True
+    valid_mask = bbox_mask & (depth_image > 0)
+    patch = depth_image[valid_mask]
+    if len(patch) < 10:
+        return None
+
+    # Depth filter: anchor on YOLO distance (asymmetric — tight far bound to exclude walls)
+    if dist_m is not None:
+        dist_mm = dist_m * 1000.0
+        margin_near = max(400.0, dist_mm * 0.35)
+        margin_far  = max(150.0, dist_mm * 0.15)
+        lo_d = max(1.0, dist_mm - margin_near)
+        hi_d = dist_mm + margin_far
+    else:
+        lo_d = float(np.percentile(patch, 25))
+        hi_d = float(np.percentile(patch, 75))
+
+    depth_mask = valid_mask & (depth_image >= lo_d) & (depth_image <= hi_d)
+    if depth_mask.sum() < 10:
+        return None
+
+    fx, fy, cx, cy = _mesh3d_intrinsics(dep_w, dep_h)
+    ys, xs = np.where(depth_mask)
+    z = depth_image[ys, xs].astype(np.float64) / 1000.0
+    points = np.stack([(xs - cx) * z / fx, (ys - cy) * z / fy, z], axis=1)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+    if len(pcd.points) < 10:
+        return None
+
+    pcd.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+    )
+    pcd.orient_normals_towards_camera_location(np.array([0.0, 0.0, 0.0]))
+
+    try:
+        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+            pcd, depth=poisson_depth, width=0, scale=1.1, linear_fit=False
+        )
+    except Exception:
+        return None
+
+    densities = np.asarray(densities)
+    mesh.remove_vertices_by_mask(densities < np.quantile(densities, 0.05))
+    if len(mesh.triangles) == 0:
+        return None
+
+    # Keep only the largest connected component
+    tri_cl, cl_n, _ = mesh.cluster_connected_triangles()
+    tri_cl, cl_n = np.asarray(tri_cl), np.asarray(cl_n)
+    if len(cl_n) > 1:
+        mesh.remove_triangles_by_mask(tri_cl != np.argmax(cl_n))
+        mesh.remove_unreferenced_vertices()
+
+    mesh = mesh.filter_smooth_laplacian(number_of_iterations=3)
+
+    if simplify > 0 and len(mesh.triangles) > simplify:
+        mesh = mesh.simplify_quadric_decimation(simplify)
+        mesh.compute_vertex_normals()
+
+    # Project vertices → RGB image coordinates
+    verts = np.asarray(mesh.vertices)
+    fz = verts[:, 2]
+    fx_rgb = fx * (img_w / dep_w)
+    fy_rgb = fy * (img_h / dep_h)
+    cx_rgb = cx * (img_w / dep_w)
+    cy_rgb = cy * (img_h / dep_h)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        u = np.where(fz > 0, verts[:, 0] / fz * fx_rgb + cx_rgb, -9999.0)
+        v = np.where(fz > 0, verts[:, 1] / fz * fy_rgb + cy_rgb, -9999.0)
+    pts2d = np.stack([u, v], axis=1)
+
+    clip_rect = (max(0, bx), max(0, by),
+                 min(img_w, bx + bw), min(img_h, by + bh))
+    return mesh, pts2d, clip_rect
+
+
+def _mesh3d_render(frame: np.ndarray, mesh, pts2d: np.ndarray,
+                   clip_rect: tuple, label: str, conf: float,
+                   dist_m) -> np.ndarray:
+    """
+    Render a 3D mesh onto the frame in hologram style.
+
+    Uses painter's algorithm (back-to-front), depth-based cyan/blue fill,
+    gold wireframe, all clipped to the detection bbox.
+    """
+    verts = np.asarray(mesh.vertices)
+    faces = np.asarray(mesh.triangles)
+    if len(faces) == 0:
+        return frame
+
+    h, w = frame.shape[:2]
+    cx1, cy1, cx2, cy2 = clip_rect
+
+    face_z = verts[faces, 2].mean(axis=1)
+    z_near = float(np.percentile(face_z, 5))
+    z_far  = float(np.percentile(face_z, 95))
+    z_range = max(z_far - z_near, 0.001)
+
+    # --- Fill pass (painter's algorithm, back→front) ---
+    overlay = frame.copy()
+    for fi in np.argsort(face_z)[::-1]:
+        face = faces[fi]
+        tri = pts2d[face]
+        if np.any(verts[face, 2] <= 0):
+            continue
+        if np.all(tri[:, 0] < -100) or np.all(tri[:, 0] > w + 100):
+            continue
+        if np.all(tri[:, 1] < -100) or np.all(tri[:, 1] > h + 100):
+            continue
+        t = np.clip((face_z[fi] - z_near) / z_range, 0.0, 1.0)
+        if t < 0.5:
+            f = t / 0.5
+            rgb = np.array([0, 255, 255]) * (1 - f) + np.array([0, 128, 255]) * f
+        else:
+            f = (t - 0.5) / 0.5
+            rgb = np.array([0, 128, 255]) * (1 - f) + np.array([64, 64, 180]) * f
+        cv2.fillPoly(overlay, [tri.astype(np.int32)], (int(rgb[2]), int(rgb[1]), int(rgb[0])))
+
+    # Blend fill within bbox only
+    fill_alpha = 0.35
+    clip_mask = np.zeros((h, w), dtype=bool)
+    clip_mask[cy1:cy2, cx1:cx2] = True
+    blended = cv2.addWeighted(frame, 1 - fill_alpha, overlay, fill_alpha, 0)
+    result = frame.copy()
+    result[clip_mask] = blended[clip_mask]
+
+    # --- Wireframe (gold), clipped to bbox ---
+    wire_layer = np.zeros_like(frame)
+    edge_set = set()
+    for face in faces:
+        for i in range(3):
+            a, b = int(face[i]), int(face[(i + 1) % 3])
+            edge_set.add((min(a, b), max(a, b)))
+    for a, b in edge_set:
+        if verts[a, 2] <= 0 or verts[b, 2] <= 0:
+            continue
+        pa = pts2d[a].astype(np.int32)
+        pb = pts2d[b].astype(np.int32)
+        cv2.line(wire_layer, tuple(pa), tuple(pb), (0, 220, 255), 1, cv2.LINE_AA)
+
+    wire_mask = (wire_layer.sum(axis=2) > 0) & clip_mask
+    wire_alpha = 0.9
+    result[wire_mask] = (
+        result[wire_mask].astype(np.float32) * (1 - wire_alpha)
+        + wire_layer[wire_mask].astype(np.float32) * wire_alpha
+    ).astype(np.uint8)
+
+    # --- Label ---
+    text = f"{label} {conf:.0%}"
+    if dist_m:
+        text += f"  {dist_m:.2f}m"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = max(0.4, min((cx2 - cx1) / 200, 1.0))
+    thickness = max(1, int(font_scale * 2))
+    (tw, th), _ = cv2.getTextSize(text, font, font_scale, thickness)
+    tx = cx1 + 4
+    ty = cy1 - 8 if cy1 > th + 12 else cy1 + th + 4
+    cv2.rectangle(result, (tx - 2, ty - th - 2), (tx + tw + 2, ty + 4),
+                  (10, 15, 10), -1)
+    cv2.putText(result, text, (tx, ty), font, font_scale,
+                (0, 220, 255), thickness, cv2.LINE_AA)
+
+    return result
+
+
 def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
                        detections: list, depth_scale: tuple,
-                       mesh_cfg: dict = None) -> np.ndarray:
+                       mesh_cfg: dict = None, use_mesh3d: bool = False) -> np.ndarray:
     """Draw Tron-style adaptive triangle mesh on detected objects."""
     img_h, img_w = frame.shape[:2]
     dep_h, dep_w = depth_image.shape[:2]
@@ -241,6 +458,19 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
         if x2 - x1 < 20 or y2 - y1 < 20:
             continue
 
+        # --- 3D mesh path (--mesh3d) ---
+        if use_mesh3d:
+            result = _mesh3d_from_detection(depth_image, det, dep_w, dep_h, img_w, img_h,
+                                            poisson_depth=_worker_mesh3d_depth,
+                                            simplify=_worker_mesh3d_simplify)
+            if result is not None:
+                mesh3d, pts2d, clip_rect = result
+                frame = _mesh3d_render(frame, mesh3d, pts2d, clip_rect,
+                                       label, conf, det.get("distance"))
+                continue  # skip Delaunay for this detection
+            # fallthrough to Delaunay if reconstruction failed
+
+        # --- Original Delaunay path ---
         # Generate adaptive point cloud
         points, point_depths, d_min, d_range = _generate_adaptive_points(
             x1, y1, x2, y2, depth_image, sx, sy, gamma, cutoff,
@@ -377,11 +607,17 @@ def draw_depth_overlay(frame: np.ndarray, depth_image: np.ndarray,
 # -- Multiprocessing worker --
 
 _worker_hud_cfg = None
+_worker_use_mesh3d = False
+_worker_mesh3d_depth = 8
+_worker_mesh3d_simplify = 0
 
 
-def _init_worker(hud_cfg):
-    global _worker_hud_cfg
+def _init_worker(hud_cfg, use_mesh3d=False, mesh3d_depth=8, mesh3d_simplify=0):
+    global _worker_hud_cfg, _worker_use_mesh3d, _worker_mesh3d_depth, _worker_mesh3d_simplify
     _worker_hud_cfg = hud_cfg
+    _worker_use_mesh3d = use_mesh3d
+    _worker_mesh3d_depth = mesh3d_depth
+    _worker_mesh3d_simplify = mesh3d_simplify
 
 
 def _draw_debug_sources(frame, debug_info):
@@ -451,7 +687,7 @@ def _process_frame(args):
             mesh_cfg = _worker_hud_cfg.get("mesh") if _worker_hud_cfg else None
             frame = draw_depth_overlay(frame, depth_image, detections,
                                        (depth_image.shape[1] / w, depth_image.shape[0] / h),
-                                       mesh_cfg)
+                                       mesh_cfg, use_mesh3d=_worker_use_mesh3d)
 
     if _worker_hud_cfg:
         hud_state = track_state or {"left_speed": 0, "left_dir": 0,
@@ -480,7 +716,20 @@ def main():
                         help="Render single frame from this depth file (saves PNG)")
     parser.add_argument("--workers", type=int, default=0,
                         help="Parallel workers (default: auto)")
+    parser.add_argument("--mesh3d", action="store_true",
+                        help="Use 3D Poisson mesh reconstruction instead of 2D Delaunay overlay "
+                             "(requires open3d; slow — best used with --frame for single frames)")
+    parser.add_argument("--mesh3d-depth", type=int, default=8,
+                        help="Poisson octree depth for --mesh3d (lower=fewer polygons/faster; "
+                             "depth=6→~14k, depth=8→~28k faces; default: 8)")
+    parser.add_argument("--mesh3d-simplify", type=int, default=0,
+                        help="Quadric decimation target for --mesh3d: reduce mesh to this many "
+                             "triangles after reconstruction (0=disabled, e.g. 2000 for low-poly)")
     args = parser.parse_args()
+
+    if args.mesh3d and not _OPEN3D_AVAILABLE:
+        print("WARNING: --mesh3d requires open3d (pip install open3d). Falling back to Delaunay.")
+        args.mesh3d = False
 
     session = Path(args.session)
     rgb_dir = session / "rgb"
@@ -589,7 +838,8 @@ def main():
         print(f"YOLO:  {debug_info['yolo']}  ({len(detections)} detections)")
         print(f"Track: {debug_info['track']}")
 
-        _init_worker(hud_cfg)
+        _init_worker(hud_cfg, use_mesh3d=args.mesh3d,
+                     mesh3d_depth=args.mesh3d_depth, mesh3d_simplify=args.mesh3d_simplify)
         frame = _process_frame((rgb_path, depth_path, detections, track_state, debug_info))
 
         out_base = args.output or f"/tmp/frame_{depth_name}.png"
@@ -721,7 +971,9 @@ def main():
     print(f"Workers: {n_workers}")
     t_start = time.time()
 
-    with Pool(n_workers, initializer=_init_worker, initargs=(hud_cfg,)) as pool:
+    with Pool(n_workers, initializer=_init_worker,
+              initargs=(hud_cfg, args.mesh3d,
+                        args.mesh3d_depth, args.mesh3d_simplify)) as pool:
         for i, frame in enumerate(pool.imap(_process_frame, frame_args, chunksize=4)):
             if frame is not None:
                 writer.write(frame)
