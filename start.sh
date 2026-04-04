@@ -1,10 +1,10 @@
 #!/bin/bash
 # Start all 5 processes for the object chaser.
-# Usage: ./start.sh [label]   (default: person)
+# Targets are configured in targets.yaml (repo root).
+# Usage: ./start.sh
 
 set -e
 
-LABEL="${1:-person}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVER_DIR="$DIR/server"
 CLIENT_DIR="$DIR/client"
@@ -49,7 +49,7 @@ wait_for_http() {
 
 export PYTHONUNBUFFERED=1
 
-echo "Starting object chaser (label=$LABEL)..."
+echo "Starting object chaser (targets from targets.yaml)..."
 
 # 1. YOLO server
 echo "[1/5] Starting YOLO server..."
@@ -92,9 +92,9 @@ echo "$YOLO_PID $SERVO_PID $CAMERA_PID $DETECTION_PID" > "$PIDFILE"
 wait_for_http "Detection server" "http://localhost:8090/detection" "$DETECTION_PID" 30 "$LOG_DIR/detection.log"
 
 # 5. Body follow client
-echo "[5/5] Starting body follow (label=$LABEL)..."
+echo "[5/5] Starting body follow..."
 cd "$CLIENT_DIR"
-python3.8 body_follow.py --label "$LABEL" > "$LOG_DIR/body_follow.log" 2>&1 &
+python3.8 body_follow.py > "$LOG_DIR/body_follow.log" 2>&1 &
 BODY_PID=$!
 echo "  PID=$BODY_PID"
 

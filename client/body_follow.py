@@ -1,13 +1,13 @@
 """Main loop: poll detection server, call chase state machine."""
 import time
-import argparse
 import asyncio
 import json
 import logging
+from pathlib import Path
+import yaml
 import aiohttp
 import chase
-from config import (CAMERA_SERVER_URL, DETECTION_SERVER_URL,
-                    DETECTION_MAX_AGE_MS, DETECTION_CONFIDENCE_MIN)
+from config import (CAMERA_SERVER_URL, DETECTION_SERVER_URL, DETECTION_MAX_AGE_MS)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -19,9 +19,45 @@ logging.getLogger('chase').setLevel(logging.INFO)
 logging.getLogger('chase').addHandler(handler)
 
 
-async def run(label='person'):
+def load_targets() -> list:
+    """Load targets.yaml from repo root. Exits on missing/invalid file."""
+    path = Path(__file__).parent.parent / 'targets.yaml'
+    if not path.exists():
+        raise FileNotFoundError(f"targets.yaml not found at {path}")
+    with open(path) as f:
+        cfg = yaml.safe_load(f)
+    targets = cfg.get('targets', [])
+    if not targets:
+        raise ValueError("targets.yaml has no targets defined")
+    return targets
+
+
+def select_target(detections: list, targets: list):
+    """Return the best detection to follow, or None.
+
+    Rules:
+    1. Keep only detections whose label is in targets and confidence >=
+       the per-target threshold.
+    2. Among those, choose the highest-priority group (lowest priority number).
+    3. Within that group, return the detection with highest confidence.
+    """
+    target_map = {t['name']: t for t in targets}
+    valid = [
+        d for d in detections
+        if d['label'] in target_map
+        and d['confidence'] >= target_map[d['label']]['confidence']
+    ]
+    if not valid:
+        return None
+    best_priority = min(target_map[d['label']]['priority'] for d in valid)
+    group = [d for d in valid if target_map[d['label']]['priority'] == best_priority]
+    return max(group, key=lambda d: d['confidence'])
+
+
+async def run(targets: list):
     import requests
-    print(f"Body follow: tracking '{label}' (Ctrl+C to stop)")
+    labels = [t['name'] for t in sorted(targets, key=lambda t: t['priority'])]
+    print(f"Body follow: targets={labels} (priority order, Ctrl+C to stop)")
 
     # Session info
     try:
@@ -53,16 +89,13 @@ async def run(label='person'):
 
                 age_ms = (time.time() - det_result['timestamp']) * 1000
                 all_detections = det_result['detections'] if age_ms <= DETECTION_MAX_AGE_MS else []
-                detections = [d for d in all_detections
-                              if d['label'] == label
-                              and d['confidence'] >= DETECTION_CONFIDENCE_MIN]
+                selected = select_target(all_detections, targets)
 
-                if detections:
-                    best = max(detections, key=lambda d: d['confidence'])
-                    x_normalized = best['centroid_x_norm']
-                    logger.info(f"'{label}': conf={best['confidence']:.2f}, "
+                if selected:
+                    x_normalized = selected['centroid_x_norm']
+                    logger.info(f"'{selected['label']}': conf={selected['confidence']:.2f}, "
                                 f"x={x_normalized:.2f}")
-                    result = chase.update(detection=best, x_normalized=x_normalized)
+                    result = chase.update(detection=selected, x_normalized=x_normalized)
                 else:
                     result = chase.update(detection=None, x_normalized=None)
 
@@ -70,10 +103,10 @@ async def run(label='person'):
                 jsonl_file.write(json.dumps({
                     "timestamp": det_result.get('frame_ts', ''),
                     "detections": det_result['detections'],
-                    "target_label": label,
-                    "target_bbox": detections[0]['bbox'] if detections else None,
-                    "target_confidence": detections[0]['confidence'] if detections else None,
-                    "x_normalized": detections[0]['centroid_x_norm'] if detections else None,
+                    "target_label": selected['label'] if selected else None,
+                    "target_bbox": selected['bbox'] if selected else None,
+                    "target_confidence": selected['confidence'] if selected else None,
+                    "x_normalized": selected['centroid_x_norm'] if selected else None,
                     "distance": result.get('distance'),
                     "action": result.get('action'),
                     "state": result.get('state'),
@@ -90,9 +123,11 @@ async def run(label='person'):
 
 
 async def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--label', default='person')
-    args = parser.parse_args()
+    try:
+        targets = load_targets()
+    except Exception as e:
+        logger.error(f"Failed to load targets.yaml: {e}")
+        return
 
     try:
         chase.init()
@@ -101,7 +136,7 @@ async def main():
         return
 
     try:
-        await run(label=args.label)
+        await run(targets=targets)
     finally:
         chase.shutdown()
         await asyncio.sleep(0.1)
