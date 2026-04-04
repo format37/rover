@@ -4,11 +4,17 @@ Chase state machine for rover object tracking.
 States:
   TRACKING   — object visible, driving forward with differential steering.
                Speed scales with distance (slow near, fast far).
+               When cliff is ahead: rotate in place toward target instead.
   LOST       — object just disappeared. Smooth deceleration, wait SEARCH_TIMEOUT.
   SEARCHING  — rotate body 360° in sequence right→left→right, repeating,
-               until object is found.
+               until object is found. Safe when cliff is ahead.
   ORIENTING  — object found off-center during search. Rotate body to face it,
-               then verify.
+               then verify. Safe when cliff is ahead.
+  BACKING    — any detected object < BACK_DISTANCE: reverse immediately.
+
+Cliff rule: forward movement is blocked whenever cliff=True. Rotation is always
+allowed. With cliff + no detection the rover searches; with cliff + detection it
+rotates toward the target in place.
 
 Search sweeps are time-based: each sweep is SEARCH_SWEEP_DEG / ROTATION_DEG_PER_SEC
 seconds. ROTATION_DEG_PER_SEC is a hardware calibration constant in config.py.
@@ -36,7 +42,6 @@ STATE_LOST = "lost"
 STATE_SEARCHING = "searching"
 STATE_ORIENTING = "orienting"
 STATE_BACKING = "backing"
-STATE_CLIFF = "cliff"
 
 # Search rotation sequence: right(0), left(1), right(0), then repeat
 _SEARCH_SEQUENCE = [0, 1, 0]
@@ -80,17 +85,6 @@ def update(detection, x_normalized, min_distance=None, cliff=False):
     cliff: True if camera server reports an edge/cliff ahead
     Returns dict with 'state', 'action', 'distance'.
     """
-    # HIGHEST priority: cliff ahead → stop immediately, stay stopped until clear
-    if cliff:
-        if _state != STATE_CLIFF:
-            _enter_state(STATE_CLIFF)
-            _stop_tracks()
-        return _result("cliff_stop")
-
-    # Cliff cleared: resume
-    if _state == STATE_CLIFF:
-        _enter_state(STATE_LOST)
-
     # Collision override: any detected object closer than BACK_DISTANCE → back up immediately
     if min_distance is not None and min_distance <= BACK_DISTANCE:
         if _state != STATE_BACKING:
@@ -101,6 +95,21 @@ def update(detection, x_normalized, min_distance=None, cliff=False):
     if _state == STATE_BACKING:
         _stop_tracks()
         _enter_state(STATE_LOST)
+
+    # Cliff: forward movement blocked; rotation always safe.
+    # With detection → rotate toward target in place.
+    # Without detection → search by rotating (scans for target, safe on edge).
+    if cliff:
+        if detection:
+            if _state != STATE_TRACKING:
+                _enter_state(STATE_TRACKING)
+            return _do_tracking_cliff(detection, x_normalized)
+        else:
+            if _state not in (STATE_SEARCHING, STATE_ORIENTING):
+                _stop_tracks()
+                _enter_state(STATE_SEARCHING)
+                _search_start()
+            # Fall through: SEARCHING/ORIENTING dispatch below (rotation only)
 
     if _state == STATE_TRACKING:
         return _do_tracking(detection, x_normalized)
@@ -281,6 +290,28 @@ def _do_orienting(detection, x_normalized):
             return _result("orient_not_found")
 
     return _result("orienting")
+
+
+def _do_tracking_cliff(detection, x_normalized):
+    """Cliff ahead: rotate toward target without moving forward."""
+    global _last_detection_time, _current_speed
+    _last_detection_time = time.monotonic()
+    _current_speed = 0.0
+
+    distance = detection.get('distance')
+    # x_normalized < 0.5 → target right → rotate right (dir=0)
+    steering = (x_normalized - 0.5) * STEERING_GAIN
+    if abs(steering) > 0.05:
+        direction = 0 if steering < 0 else 1
+        dir_name = 'right' if direction == 0 else 'left'
+        logger.info(f"Cliff+tracking: rotating {dir_name} toward target "
+                    f"(x={x_normalized:.2f}, dist={distance})")
+        _send_rotate(ROTATION_SPEED, direction, SAFETY_TIMEOUT)
+    else:
+        _stop_tracks()
+        logger.info(f"Cliff+tracking: target centered, holding (dist={distance})")
+
+    return _result("tracking_cliff_rotate", distance=distance)
 
 
 def _do_backing(distance):
