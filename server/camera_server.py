@@ -24,8 +24,8 @@ import uvicorn
 
 
 # Estimates for frame limit computation
-ESTIMATED_RGB_SIZE = 600_000       # ~600KB per JPEG at quality 95
-ESTIMATED_DEPTH_SIZE = 1_012_600   # ~1.0MB per .npy (1280x720 uint16)
+ESTIMATED_RGB_SIZE = 150_000       # ~150KB per JPEG at quality 85, 848×480
+ESTIMATED_DEPTH_SIZE = 820_000     # ~820KB per .npy (848×480 uint16)
 DISK_HEADROOM = 500_000_000        # Reserve 500MB free
 
 
@@ -35,10 +35,10 @@ class DistanceRequest(BaseModel):
 
 
 class CameraManager:
-    def __init__(self, session_dir: str = "sessions", jpeg_quality: int = 95,
-                 frame_limit: Optional[int] = None):
+    def __init__(self, session_dir: str = "sessions", jpeg_quality: int = 85,
+                 frame_limit: Optional[int] = None, save_depth: bool = True):
         self.jpeg_quality = jpeg_quality
-        self.depth_saving_enabled: bool = False
+        self.depth_saving_enabled: bool = save_depth
         self.session_base = Path(session_dir).resolve()
 
         # Create session folder
@@ -70,14 +70,14 @@ class CameraManager:
         self.saving_active: bool = False
         self.capture_fps: float = 0.0
 
-        # Write queue
-        self._write_queue: queue.Queue = queue.Queue(maxsize=60)
+        # Write queue — large enough to buffer ~2s of capture at 60fps
+        self._write_queue: queue.Queue = queue.Queue(maxsize=120)
 
         # RealSense setup
         self.pipeline = rs.pipeline()
         rs_config = rs.config()
-        rs_config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
-        rs_config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
+        rs_config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 60)
+        rs_config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 60)
         profile = self.pipeline.start(rs_config)
 
         self.depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
@@ -105,7 +105,8 @@ class CameraManager:
         self.session_base.mkdir(parents=True, exist_ok=True)
         available = shutil.disk_usage(self.session_base).free
         budget = available - DISK_HEADROOM
-        est_frame_size = ESTIMATED_RGB_SIZE + ESTIMATED_DEPTH_SIZE / 3
+        depth_size = ESTIMATED_DEPTH_SIZE if self.depth_saving_enabled else 0
+        est_frame_size = ESTIMATED_RGB_SIZE + depth_size
         return max(100, int(budget / est_frame_size))
 
     def _make_timestamp(self) -> str:
@@ -293,6 +294,7 @@ async def lifespan(app):
         session_dir=cli_args.session_dir,
         jpeg_quality=cli_args.jpeg_quality,
         frame_limit=cli_args.frame_limit,
+        save_depth=not cli_args.no_save_depth,
     )
     yield
     if camera_manager:
@@ -402,9 +404,11 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--session-dir", type=str, default="sessions",
                         help="Base directory for session folders")
-    parser.add_argument("--jpeg-quality", type=int, default=95)
+    parser.add_argument("--jpeg-quality", type=int, default=85)
     parser.add_argument("--frame-limit", type=int, default=None,
                         help="Override dynamic frame limit")
+    parser.add_argument("--no-save-depth", action="store_true",
+                        help="Disable depth saving (saves disk space; depth still used for distance queries)")
     cli_args = parser.parse_args()
 
     print(f"Starting Camera Server on port {cli_args.port}...")

@@ -136,15 +136,7 @@ async def _inference_loop() -> None:
                     relative_position_deg=relative_position_deg,
                 ))
 
-            # 4. Toggle depth saving on camera server
-            try:
-                await session.post(
-                    f"{CAMERA_SERVER_URL}/depth-saving",
-                    params={"enabled": "true" if detections else "false"})
-            except Exception:
-                pass
-
-            # 5. Write to cache
+            # 4. Write to cache
             new_result = DetectionResult(
                 timestamp=time.time(),
                 frame_ts=frame_ts,
