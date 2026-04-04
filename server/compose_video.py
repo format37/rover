@@ -453,8 +453,10 @@ def _process_frame(args):
                                        (depth_image.shape[1] / w, depth_image.shape[0] / h),
                                        mesh_cfg)
 
-    if track_state is not None:
-        frame = draw_hud(frame, track_state, depth_image, _worker_hud_cfg)
+    if _worker_hud_cfg:
+        hud_state = track_state or {"left_speed": 0, "left_dir": 0,
+                                    "right_speed": 0, "right_dir": 0}
+        frame = draw_hud(frame, hud_state, depth_image, _worker_hud_cfg)
 
     if _worker_hud_cfg and _worker_hud_cfg.get("debug_sources"):
         _draw_debug_sources(frame, debug_info)
