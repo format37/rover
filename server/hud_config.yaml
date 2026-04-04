@@ -24,14 +24,14 @@ hud:
     line_thickness: 1
     # Normalization range: maps this speed range to 0-100% of the indicator
     speed_min: 0.02
-    speed_max: 0.10
+    speed_max: 0.80
 
-  servo:
-    radius: 75
-    needle_length: 63
-    arc_thickness: 1
-    needle_thickness: 2
-    tick_length: 12
+  depth_map:
+    size: 150          # widget width and height in pixels
+    max_range_m: 4.0   # maximum displayed range in meters
+    stop_dist_m: 0.7   # STOP_DISTANCE warning ring (meters) — matches config.py STOP_DISTANCE
+    hfov_deg: 87.0     # camera horizontal FOV — matches CAMERA_FOV in config.py
+    subsample: 6       # pixel step for depth subsampling (lower = denser, slower)
 
   # Depth mesh overlay on detected objects
   mesh:

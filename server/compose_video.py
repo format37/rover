@@ -390,7 +390,7 @@ def _draw_debug_sources(frame, debug_info):
         f"RGB:   {debug_info['rgb']}",
         f"Depth: {debug_info['depth']}",
         f"YOLO:  {debug_info['yolo']}",
-        f"Servo: {debug_info['servo']}",
+        f"Track: {debug_info['track']}",
     ]
     font = cv2.FONT_HERSHEY_SIMPLEX
     fs, ft = 0.4, 1
@@ -438,21 +438,23 @@ def _draw_log_lines(frame, debug_info):
 
 def _process_frame(args):
     """Process a single frame (runs in worker process)."""
-    rgb_path, depth_path, detections, servo_state, debug_info = args
+    rgb_path, depth_path, detections, track_state, debug_info = args
     frame = cv2.imread(rgb_path)
     if frame is None:
         return None
 
-    if depth_path is not None and detections:
+    depth_image = None
+    if depth_path is not None:
         depth_image = np.load(depth_path)
-        h, w = frame.shape[:2]
-        mesh_cfg = _worker_hud_cfg.get("mesh") if _worker_hud_cfg else None
-        frame = draw_depth_overlay(frame, depth_image, detections,
-                                   (depth_image.shape[1] / w, depth_image.shape[0] / h),
-                                   mesh_cfg)
+        if detections:
+            h, w = frame.shape[:2]
+            mesh_cfg = _worker_hud_cfg.get("mesh") if _worker_hud_cfg else None
+            frame = draw_depth_overlay(frame, depth_image, detections,
+                                       (depth_image.shape[1] / w, depth_image.shape[0] / h),
+                                       mesh_cfg)
 
-    if servo_state is not None:
-        frame = draw_hud(frame, servo_state, _worker_hud_cfg)
+    if track_state is not None:
+        frame = draw_hud(frame, track_state, depth_image, _worker_hud_cfg)
 
     if _worker_hud_cfg and _worker_hud_cfg.get("debug_sources"):
         _draw_debug_sources(frame, debug_info)
@@ -563,19 +565,19 @@ def main():
         if target_label:
             detections = [d for d in detections if d.get("label") == target_label]
 
-        servo_state = None
-        servo_ts = ""
+        track_state = None
+        track_ts = ""
         if servo_entries:
             servo_idx = find_closest(depth_ts, servo_entries, 1.0)
             if servo_idx >= 0:
-                servo_state = servo_entries[servo_idx][1]
-                servo_ts = servo_state.get("timestamp", "")
+                track_state = servo_entries[servo_idx][1]
+                track_ts = track_state.get("timestamp", "")
 
         debug_info = {
             "rgb": Path(rgb_path).name,
             "depth": Path(depth_path).name,
             "yolo": yolo_ts or "-",
-            "servo": servo_ts or "-",
+            "track": track_ts or "-",
         }
         for name, entries in log_sources.items():
             debug_info[f"log_{name}"] = find_most_recent(depth_ts, entries)
@@ -583,10 +585,10 @@ def main():
         print(f"RGB:   {debug_info['rgb']}")
         print(f"Depth: {debug_info['depth']}")
         print(f"YOLO:  {debug_info['yolo']}  ({len(detections)} detections)")
-        print(f"Servo: {debug_info['servo']}")
+        print(f"Track: {debug_info['track']}")
 
         _init_worker(hud_cfg)
-        frame = _process_frame((rgb_path, depth_path, detections, servo_state, debug_info))
+        frame = _process_frame((rgb_path, depth_path, detections, track_state, debug_info))
 
         out_base = args.output or f"/tmp/frame_{depth_name}.png"
         out_stem = out_base.rsplit(".", 1)[0]
@@ -674,8 +676,7 @@ def main():
     writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
 
     # Pre-compute frame processing arguments
-    last_servo_state = {
-        "servo_angle": 90, "servo_target": 90,
+    last_track_state = {
         "left_speed": 0, "left_dir": 0, "right_speed": 0, "right_dir": 0,
     }
     has_servo = bool(servo_entries)
@@ -693,24 +694,24 @@ def main():
         if target_label:
             detections = [d for d in detections if d.get("label") == target_label]
 
-        servo_state = None
-        servo_ts = ""
+        track_state = None
+        track_ts = ""
         if has_servo:
             servo_idx = find_closest(rgb_ts, servo_entries, 1.0)
             if servo_idx >= 0:
-                last_servo_state = servo_entries[servo_idx][1]
-                servo_ts = last_servo_state.get("timestamp", "")
-            servo_state = dict(last_servo_state)
+                last_track_state = servo_entries[servo_idx][1]
+                track_ts = last_track_state.get("timestamp", "")
+            track_state = dict(last_track_state)
 
         debug_info = {
             "rgb": Path(rgb_path).name,
             "depth": Path(depth_path).name if depth_path else "-",
             "yolo": yolo_ts or "-",
-            "servo": servo_ts or "-",
+            "track": track_ts or "-",
         }
         for name, entries in log_sources.items():
             debug_info[f"log_{name}"] = find_most_recent(rgb_ts, entries)
-        frame_args.append((str(rgb_path), depth_path, detections, servo_state, debug_info))
+        frame_args.append((str(rgb_path), depth_path, detections, track_state, debug_info))
 
     # Parallel processing
     n_workers = args.workers if args.workers > 0 else min(os.cpu_count() or 4, 8)
