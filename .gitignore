@@ -1,8 +1,10 @@
-object_chaser/docs/
-object_chaser/client/__pycache__/
-object_chaser/client/prompt.md
+client/__pycache__/
+client/prompt.md
 *.pyc
 __pycache__/
-object_chaser/server/sessions/
+server/sessions/
 logs/
 CLAUDE.md
+archive/
+examples/
+docs/

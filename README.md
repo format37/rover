@@ -1,105 +1,112 @@
-### Jetson Nano
-1. **Download the Jetson Nano image**
-[Download and flash from ubuntu](https://qengineering.eu/install-opencv-on-jetson-nano.html)  
-Flashing is available by RMB on image file and select SD.
+# Object Chaser
 
-2. **Check YOLOv5 OpenCV GPU**
+Autonomous object tracking system using 5 processes: camera capture, YOLO detection, servo/track control, a detection cache server, and client behavior logic.
+
+The detection server decouples YOLO inference from the control loop — the client polls a cached result at ~20fps without ever blocking on inference latency (~1fps on Jetson).
+
+## Installation
 ```
-mkdir ~/projects
-cd ~/projects
-git clone https://github.com/format37/yolov5-opencv-cpp-python.git
-git clone https://github.com/format37/rover.git
-cd rover/object_chaser
-cp ../../yolov5-opencv-cpp-python/sample.mp4 ./
-cp ../../yolov5-opencv-cpp-python/config_files ./
-python3 yolo_test.py cuda
-python3 opencv_cuda_test.py
+sudo apt-get install python3-setuptools python3-pip libjpeg-dev zlib1g-dev
 ```
 
-3. **Check torch GPU**
-```
-python3 torch_cuda_test.py
-```
+## Running
 
-### PyAidio installation
-I've used the usb audio device which works well with both speaker and mic.
-```
-sudo apt-get install portaudio19-dev
-```
-### Realsense camera installation on Jetson nano
-0. Ensure that python3.8+ is installed and defined as default python. I am using 3.8. Check pyrealsense2 required python version if you need to use other version.
-To install the `pyrealsense2` Python wrapper on a Jetson Nano, you need to build the Intel RealSense SDK (`librealsense`) from source, as pre-built binaries are not compatible with the ARM architecture of the Jetson Nano. This process will also install the necessary RealSense software. Here's a step-by-step guide:
+### Quick start (recommended)
 
-1. **Update and Upgrade System Packages**:
 ```bash
-sudo apt-get update && sudo apt-get upgrade -y
+cd ~/projects/rover/object_chaser/
+./start.sh person      # starts all 5 processes, waits for readiness, tails log
+./stop.sh              # kills all 5 cleanly
 ```
 
-2. **Install Required Dependencies**:
-Follow the instructions for the [Linux Distribution](https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md).
-Check the realsense with GUI:
-```
-realsense-viewer
-```
-If camera works well in GUI then continue to configure python wrappers:
+### Manual (5 terminals, in order)
+
 ```bash
-sudo apt-get update
-sudo apt-get install -y \
-    git \
-    libssl-dev \
-    libusb-1.0-0-dev \
-    pkg-config \
-    libgtk-3-dev \
-    libcurl4-openssl-dev \
-    libglu1-mesa-dev
+# Terminal 1: Camera server — RealSense capture + frame serving
+cd ~/projects/rover/object_chaser/server/
+python3.8 camera_server.py
+
+# Terminal 2: YOLO server — GPU inference (python3.6 required for Jetson GPU)
+cd ~/projects/rover/object_chaser/server/
+python3.6 yolo_server.py
+
+# Terminal 3: Servo + Track API — I2C hardware control
+cd ~/projects/rover/object_chaser/server/
+python3.8 servo_api.py
+
+# Terminal 4: Detection server — async inference cache
+cd ~/projects/rover/object_chaser/server/
+python3.8 detection_server.py
+
+# Terminal 5: Client — behavior logic
+cd ~/projects/rover/object_chaser/client/
+python3.8 body_follow.py --label person
 ```
 
-3. **Clone the `librealsense` Repository**:
+Start in order: camera → yolo → servo → detection → client.
+After YOLO is ready, call `curl -X POST http://localhost:8080/start-saving` to begin saving RGB frames (done automatically by `start.sh`).
+
+### camera_server.py CLI options
+- `--session-dir sessions` — base directory for session folders
+- `--jpeg-quality 95` — JPEG encoding quality
+- `--frame-limit N` — override auto-computed frame limit (default: computed from free disk space)
+
+## Session file layout
+
+```
+sessions/<timestamp>/
+  rgb/          # JPEG frames (every frame while saving active)
+  depth/        # .npy depth arrays (every ~3rd frame, only when target detected)
+  yolo/         # detections.jsonl (written by body_follow.py)
+  servo/        # state.jsonl (written by servo_api.py)
+```
+
+## API Endpoints
+
+### Detection server (:8090)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/detection` | GET | Last cached inference result. Returns detections with `label`, `confidence`, `bbox`, `centroid_x_norm`, `distance`, `relative_position_deg` |
+| `/status` | GET | `loop_fps`, `last_result_age_ms`, `cache_has_detections` |
+
+### Camera server (:8080)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/frame` | GET | Latest JPEG frame. Headers: `X-Timestamp`, `X-Frame-Number`, `X-Saving-Active` |
+| `/distance` | POST | Depth distance for a bbox. Body: `{"bbox": [x,y,w,h], "shrink": 0.2}`. Returns: `{"distance": 1.23}` |
+| `/session` | GET | Session metadata: path, yolo_dir, servo_dir, frame_count, saving_active |
+| `/status` | GET | Health check: capture_fps, frame_count, saving status |
+| `/start-saving` | POST | Enable RGB frame saving (called by start.sh after YOLO warmup) |
+| `/depth-saving` | POST | `?enabled=true\|false` — toggle depth saving (called by detection_server) |
+
+### Servo + Track API (:8000)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/status` | GET | Current servo position and status |
+| `/move` | POST | Move servo to angle. Body: `{"angle": 90}` |
+| `/speed` | POST | Set servo speed. Body: `{"steps_per_second": 50}` |
+| `/stop` | POST | Stop servo movement |
+| `/tracks/move` | POST | Move both tracks. Body: `{"left_speed": 0.1, "left_dir": 0, "right_speed": 0.1, "right_dir": 1, "duration": 2}` |
+| `/tracks/rotate` | POST | Rotate in place. Body: `{"speed": 0.05, "direction": 1, "duration": 2}` |
+| `/tracks/stop` | POST | Stop both tracks |
+
+### YOLO server (:8765)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/detect/` | POST | Send JPEG, get bounding boxes. Form field: `file` |
+| `/ready` | GET | Readiness probe (triggers warmup inference if needed) |
+
+## SERVO_DIR validation
+
+Before `relative_position_deg` can be used in control logic, validate `SERVO_DIR` in `config.py`:
+
+1. Start all servers. Command head to 70°: `curl -X POST localhost:8000/move -d '{"angle":70}'`
+2. Stand at frame center. Read: `curl localhost:8090/detection | python3 -m json.tool`
+3. Check `relative_position_deg` — it should be **negative** (you are to the left of rover forward).
+4. If positive, set `SERVO_DIR = 1` in `config.py`. Current default: `-1`.
+
+## Network
+
 ```bash
-git clone https://github.com/IntelRealSense/librealsense.git
-cd librealsense
+sudo nmcli device wifi connect "YOUR_HOTSPOT_SSID" password "YOUR_PASSWORD"
 ```
-
-4. **Set Up Udev Rules**:
-```bash
-sudo ./scripts/setup_udev_rules.sh
-```
-
-5. **Create a Build Directory and Navigate Into It**:
-```bash
-mkdir build && cd build
-```
-
-6. **Configure the Build with CMake**:
-```bash
-cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=bool:true -DBUILD_SHARED_LIBS=false -DPYTHON_EXECUTABLE=$(which python3.8)
-```
-This command sets up the build to use the RSUSB backend and includes the Python bindings for Python 3.
-
-7. **Compile and Install**:
-```bash
-make -j$(nproc)
-sudo make install
-```
-This step compiles the library and installs it on your system.
-
-8. **Instal pyrealsense via pip**
-```bash
-python3 -m pip install pyrealsense2
-```
-
-9. **Check pyrealsense2**
-```bash
-cd ~/projects/librealsense/wrappers/python/examples
-python3.8 opencv_viewer_example.py
-```
-
-<!-- 8. **Update the Python Path**:
-```bash
-# export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.8/pyrealsense2/
-# Add the correct path to PYTHONPATH
-export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.8
-```
-This command adds the installed `pyrealsense2` module to your Python path.
-
-After completing these steps, you should be able to import `pyrealsense2` in your Python scripts and utilize the RealSense SDK functionalities. -->
