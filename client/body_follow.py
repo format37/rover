@@ -21,7 +21,7 @@ logging.getLogger('chase').addHandler(handler)
 
 def load_targets() -> list:
     """Load targets.yaml from repo root. Exits on missing/invalid file."""
-    path = Path(__file__).parent.parent / 'targets.yaml'
+    path = Path(__file__).resolve().parent.parent / 'targets.yaml'
     if not path.exists():
         raise FileNotFoundError(f"targets.yaml not found at {path}")
     with open(path) as f:
