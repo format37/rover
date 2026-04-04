@@ -1,11 +1,14 @@
 # Object Chaser
 
-Autonomous object tracking system using 5 processes: camera capture, YOLO detection, servo/track control, a detection cache server, and client behavior logic.
+Autonomous object tracking system using 5 processes: camera capture, YOLO detection, track control, a detection cache server, and client behavior logic.
 
 The detection server decouples YOLO inference from the control loop — the client polls a cached result at ~20fps without ever blocking on inference latency (~1fps on Jetson).
 
 ## Installation
-```
+
+> **Required before first run:** Follow [`docs/installation.md`](docs/installation.md) to set up YOLO+OpenCV GPU support and the RealSense depth camera on Jetson Nano. These cannot be installed via pip alone — both require source builds for the ARM architecture.
+
+```bash
 sudo apt-get install python3-setuptools python3-pip libjpeg-dev zlib1g-dev
 ```
 
@@ -14,7 +17,7 @@ sudo apt-get install python3-setuptools python3-pip libjpeg-dev zlib1g-dev
 ### Quick start (recommended)
 
 ```bash
-cd ~/projects/rover/object_chaser/
+cd ~/projects/rover/
 ./start.sh person      # starts all 5 processes, waits for readiness, tails log
 ./stop.sh              # kills all 5 cleanly
 ```
@@ -23,27 +26,27 @@ cd ~/projects/rover/object_chaser/
 
 ```bash
 # Terminal 1: Camera server — RealSense capture + frame serving
-cd ~/projects/rover/object_chaser/server/
+cd ~/projects/rover/server/
 python3.8 camera_server.py
 
 # Terminal 2: YOLO server — GPU inference (python3.6 required for Jetson GPU)
-cd ~/projects/rover/object_chaser/server/
+cd ~/projects/rover/server/
 python3.6 yolo_server.py
 
-# Terminal 3: Servo + Track API — I2C hardware control
-cd ~/projects/rover/object_chaser/server/
+# Terminal 3: Track API — I2C hardware control (PCA9685)
+cd ~/projects/rover/server/
 python3.8 servo_api.py
 
 # Terminal 4: Detection server — async inference cache
-cd ~/projects/rover/object_chaser/server/
+cd ~/projects/rover/server/
 python3.8 detection_server.py
 
 # Terminal 5: Client — behavior logic
-cd ~/projects/rover/object_chaser/client/
+cd ~/projects/rover/client/
 python3.8 body_follow.py --label person
 ```
 
-Start in order: camera → yolo → servo → detection → client.
+Start in order: camera → yolo → tracks → detection → client.
 After YOLO is ready, call `curl -X POST http://localhost:8080/start-saving` to begin saving RGB frames (done automatically by `start.sh`).
 
 ### camera_server.py CLI options
@@ -79,16 +82,13 @@ sessions/<timestamp>/
 | `/start-saving` | POST | Enable RGB frame saving (called by start.sh after YOLO warmup) |
 | `/depth-saving` | POST | `?enabled=true\|false` — toggle depth saving (called by detection_server) |
 
-### Servo + Track API (:8000)
+### Track API (:8000)
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/status` | GET | Current servo position and status |
-| `/move` | POST | Move servo to angle. Body: `{"angle": 90}` |
-| `/speed` | POST | Set servo speed. Body: `{"steps_per_second": 50}` |
-| `/stop` | POST | Stop servo movement |
 | `/tracks/move` | POST | Move both tracks. Body: `{"left_speed": 0.1, "left_dir": 0, "right_speed": 0.1, "right_dir": 1, "duration": 2}` |
 | `/tracks/rotate` | POST | Rotate in place. Body: `{"speed": 0.05, "direction": 1, "duration": 2}` |
 | `/tracks/stop` | POST | Stop both tracks |
+| `/status` | GET | Current track state |
 
 ### YOLO server (:8765)
 | Endpoint | Method | Description |
@@ -96,14 +96,14 @@ sessions/<timestamp>/
 | `/detect/` | POST | Send JPEG, get bounding boxes. Form field: `file` |
 | `/ready` | GET | Readiness probe (triggers warmup inference if needed) |
 
-## SERVO_DIR validation
+## Track directions
 
-Before `relative_position_deg` can be used in control logic, validate `SERVO_DIR` in `config.py`:
-
-1. Start all servers. Command head to 70°: `curl -X POST localhost:8000/move -d '{"angle":70}'`
-2. Stand at frame center. Read: `curl localhost:8090/detection | python3 -m json.tool`
-3. Check `relative_position_deg` — it should be **negative** (you are to the left of rover forward).
-4. If positive, set `SERVO_DIR = 1` in `config.py`. Current default: `-1`.
+```
+Forward:       track0 dir=0, track1 dir=1
+Backward:      track0 dir=1, track1 dir=0
+Rotate left:   both dir=1
+Rotate right:  both dir=0
+```
 
 ## Network
 
