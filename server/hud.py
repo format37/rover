@@ -118,8 +118,9 @@ def _draw_track(overlay, cx, cy, velocity, cfg, color_cfg):
 def _draw_depth_map(frame, cx, cy, depth_image, cfg, color_cfg):
     """Top-down depth projection: rover at bottom-center, obstacles project upward.
 
-    Each depth pixel is projected via its horizontal camera angle and distance
-    to a 2D bird's-eye position. Color: bright=near, dim=far.
+    Renders onto a local canvas then blits to frame — range rings and all other
+    elements are naturally clipped to the widget boundary, never bleeding into
+    adjacent track indicators.
     """
     size = cfg.get("size", 150)
     max_range_m = cfg.get("max_range_m", 4.0)
@@ -132,47 +133,44 @@ def _draw_depth_map(frame, cx, cy, depth_image, cfg, color_cfg):
     bg = _t(color_cfg["color_bg"])
     negative = _t(color_cfg["color_negative"])
 
-    x0 = cx - size // 2
-    y0 = cy - size // 2
+    # Local canvas — all drawing stays within [0, size)
+    canvas = np.full((size, size, 3), bg, dtype=np.uint8)
 
-    # Background
-    cv2.rectangle(frame, (x0, y0), (x0 + size, y0 + size), bg, -1)
-
-    # Rover at bottom-center; scale maps max_range_m to widget height
-    ox = cx
-    oy = y0 + size - 10
+    # Rover at bottom-center of canvas (local coordinates)
+    ox = size // 2
+    oy = size - 10
     scale = (size - 14) / max_range_m  # pixels per meter
 
     # FOV cone lines
     hfov_half = math.radians(hfov_deg / 2)
     cone_len = int(max_range_m * scale)
-    lx = max(x0, int(ox - cone_len * math.sin(hfov_half)))
-    rx = min(x0 + size - 1, int(ox + cone_len * math.sin(hfov_half)))
-    ty = max(y0 + 2, oy - cone_len)
-    cv2.line(frame, (ox, oy), (lx, ty), dim, 1, cv2.LINE_AA)
-    cv2.line(frame, (ox, oy), (rx, ty), dim, 1, cv2.LINE_AA)
+    lx = int(ox - cone_len * math.sin(hfov_half))
+    rx = int(ox + cone_len * math.sin(hfov_half))
+    ty = oy - cone_len
+    cv2.line(canvas, (ox, oy), (lx, ty), dim, 1, cv2.LINE_AA)
+    cv2.line(canvas, (ox, oy), (rx, ty), dim, 1, cv2.LINE_AA)
 
-    # Distance rings + labels (upper semicircle)
+    # Distance rings + labels — cv2 clips ellipses to canvas bounds automatically
     font = cv2.FONT_HERSHEY_SIMPLEX
     for d_m in [1.0, 2.0, 3.0, 4.0]:
         if d_m > max_range_m:
             continue
         r_px = int(d_m * scale)
-        cv2.ellipse(frame, (ox, oy), (r_px, r_px), 0, 180, 360, dim, 1, cv2.LINE_AA)
+        cv2.ellipse(canvas, (ox, oy), (r_px, r_px), 0, 180, 360, dim, 1, cv2.LINE_AA)
         lbl_x = ox + r_px + 2
-        if lbl_x < x0 + size - 12:
-            cv2.putText(frame, f"{d_m:.0f}m", (lbl_x, oy - 2),
+        if lbl_x < size - 12:
+            cv2.putText(canvas, f"{d_m:.0f}m", (lbl_x, oy - 2),
                         font, 0.3, dim, 1, cv2.LINE_AA)
 
     # Stop distance ring (warning color)
     stop_r = int(stop_dist_m * scale)
     if stop_r > 0:
-        cv2.ellipse(frame, (ox, oy), (stop_r, stop_r), 0, 180, 360,
+        cv2.ellipse(canvas, (ox, oy), (stop_r, stop_r), 0, 180, 360,
                     negative, 1, cv2.LINE_AA)
         lbl_x = ox + stop_r + 2
         lbl_y = oy - stop_r // 2
-        if lbl_x < x0 + size - 10 and lbl_y > y0 + 8:
-            cv2.putText(frame, f"{stop_dist_m:.1f}m", (lbl_x, lbl_y),
+        if lbl_x < size - 10 and lbl_y > 8:
+            cv2.putText(canvas, f"{stop_dist_m:.1f}m", (lbl_x, lbl_y),
                         font, 0.3, negative, 1, cv2.LINE_AA)
 
     # Depth point cloud projection
@@ -191,37 +189,37 @@ def _draw_depth_map(frame, cx, cy, depth_image, cfg, color_cfg):
         valid = d_mm > 0
         d_m_arr = d_mm[valid] / 1000.0
 
-        # Horizontal angle from pixel x position
         px_norm = gx[valid].astype(np.float32) / dep_w - 0.5
         ha = px_norm * hfov_rad
 
-        # World coordinates (top-down projection ignores vertical angle)
-        x_w = d_m_arr * np.sin(ha)   # lateral offset
-        z_w = d_m_arr * np.cos(ha)   # forward distance
+        x_w = d_m_arr * np.sin(ha)
+        z_w = d_m_arr * np.cos(ha)
 
-        # Canvas coordinates
         map_x = (ox + x_w * scale).astype(np.int32)
         map_y = (oy - z_w * scale).astype(np.int32)
 
-        # Clip to widget bounds
-        in_b = ((map_x >= x0) & (map_x < x0 + size) &
-                (map_y >= y0) & (map_y < y0 + size))
+        # Clip to canvas bounds
+        in_b = (map_x >= 0) & (map_x < size) & (map_y >= 0) & (map_y < size)
         map_x = map_x[in_b]
         map_y = map_y[in_b]
         d_f = d_m_arr[in_b]
 
-        # Color: accent=near, dim=far (linear interpolation)
         t = np.clip(d_f / max_range_m, 0.0, 1.0)
-        frame[map_y, map_x, 0] = (accent[0] * (1 - t) + dim[0] * t).astype(np.uint8)
-        frame[map_y, map_x, 1] = (accent[1] * (1 - t) + dim[1] * t).astype(np.uint8)
-        frame[map_y, map_x, 2] = (accent[2] * (1 - t) + dim[2] * t).astype(np.uint8)
+        canvas[map_y, map_x, 0] = (accent[0] * (1 - t) + dim[0] * t).astype(np.uint8)
+        canvas[map_y, map_x, 1] = (accent[1] * (1 - t) + dim[1] * t).astype(np.uint8)
+        canvas[map_y, map_x, 2] = (accent[2] * (1 - t) + dim[2] * t).astype(np.uint8)
 
     # Rover marker (filled triangle pointing forward/up)
     rover_pts = np.array([[ox, oy - 7], [ox - 5, oy + 1], [ox + 5, oy + 1]])
-    cv2.fillPoly(frame, [rover_pts], accent)
+    cv2.fillPoly(canvas, [rover_pts], accent)
 
     # Widget border
-    _draw_rounded_rect(frame, x0, y0, size, size, 4, dim, thickness=1)
+    _draw_rounded_rect(canvas, 0, 0, size, size, 4, dim, thickness=1)
+
+    # Blit canvas to frame — hard clip, nothing bleeds outside this region
+    x0 = cx - size // 2
+    y0 = cy - size // 2
+    frame[y0:y0 + size, x0:x0 + size] = canvas
 
 
 def draw_hud(frame: np.ndarray, track_state: dict, depth_image, cfg: dict) -> np.ndarray:
@@ -273,11 +271,12 @@ def draw_hud(frame: np.ndarray, track_state: dict, depth_image, cfg: dict) -> np
     color_cfg["font_scale"] = cfg["font_scale"]
     color_cfg["font_thickness"] = cfg["font_thickness"]
 
-    lt_cx = panel_x + tc["width"] // 2
-    _draw_track(frame, lt_cx, track_cy, left_vel, tc, color_cfg)
-
+    # Depth map first (canvas-clipped) — then tracks drawn on top
     dm_cx = panel_x + tc["width"] + gap + dm_size // 2
     _draw_depth_map(frame, dm_cx, dm_cy, depth_image, dmc, color_cfg)
+
+    lt_cx = panel_x + tc["width"] // 2
+    _draw_track(frame, lt_cx, track_cy, left_vel, tc, color_cfg)
 
     rt_cx = panel_x + tc["width"] + gap + dm_size + gap + tc["width"] // 2
     _draw_track(frame, rt_cx, track_cy, right_vel, tc, color_cfg)
