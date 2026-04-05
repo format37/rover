@@ -24,10 +24,11 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 
-# Estimates for frame limit computation
+# Estimates for initial frame limit (recalculated after RECALC_AFTER_FRAMES)
 ESTIMATED_RGB_SIZE = 150_000       # ~150KB per JPEG at quality 85, 848×480
 ESTIMATED_DEPTH_SIZE = 820_000     # ~820KB per .npy (848×480 uint16)
 DISK_HEADROOM = 2_000_000_000      # Reserve 2GB free
+RECALC_AFTER_FRAMES = 30           # Recalculate frame limit from actual sizes
 
 # Cliff detection: sample the bottom CLIFF_BOTTOM_FRAC of the depth frame.
 # If the median depth of valid pixels there exceeds CLIFF_DEPTH_THRESHOLD metres
@@ -204,8 +205,33 @@ class CameraManager:
 
         print("Capture thread stopped")
 
+    def _recalc_frame_limit(self):
+        """Recalculate frame limit from actual file sizes on disk."""
+        rgb_files = list(self.rgb_dir.glob("*.jpg"))
+        if not rgb_files:
+            return
+        total_rgb = sum(f.stat().st_size for f in rgb_files)
+        avg_rgb = total_rgb / len(rgb_files)
+
+        avg_depth = 0
+        if self.depth_saving_enabled:
+            depth_files = list(self.depth_dir.glob("*.npy"))
+            if depth_files:
+                total_depth = sum(f.stat().st_size for f in depth_files)
+                avg_depth = total_depth / len(depth_files)
+
+        avg_frame = avg_rgb + avg_depth
+        available = shutil.disk_usage(self.session_base).free
+        budget = available - DISK_HEADROOM
+        new_limit = self.frame_count + max(100, int(budget / avg_frame))
+
+        print(f"Frame limit recalculated: {self.frame_limit} -> {new_limit} "
+              f"(avg frame {avg_frame/1000:.0f}KB: rgb {avg_rgb/1000:.0f}KB + depth {avg_depth/1000:.0f}KB)")
+        self.frame_limit = new_limit
+
     def _writer_loop(self):
         print("Writer thread started")
+        recalc_done = False
         while not self._stop_event.is_set():
             try:
                 item = self._write_queue.get(timeout=0.5)
@@ -225,6 +251,12 @@ class CameraManager:
 
             with self._lock:
                 self.frame_count += 1
+
+                # Recalculate frame limit from actual sizes after first N frames
+                if not recalc_done and self.frame_count >= RECALC_AFTER_FRAMES:
+                    self._recalc_frame_limit()
+                    recalc_done = True
+
                 if self.frame_count >= self.frame_limit:
                     self.saving_active = False
                     print(f"Frame limit reached ({self.frame_limit}), saving stopped")
