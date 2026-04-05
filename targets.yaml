@@ -10,9 +10,18 @@ targets:
   - name: dog
     priority: 1
     confidence: 0.7
+  - name: cow
+    priority: 1
+    confidence: 0.8
   - name: bear
     priority: 1
-    confidence: 0.7
+    confidence: 0.8
+  - name: horse
+    priority: 1
+    confidence: 0.8
+  - name: elephant
+    priority: 1
+    confidence: 0.8
   - name: person
     priority: 2
     confidence: 0.8
