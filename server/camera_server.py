@@ -27,7 +27,7 @@ import uvicorn
 # Estimates for initial frame limit (recalculated after RECALC_AFTER_FRAMES)
 ESTIMATED_RGB_SIZE = 150_000       # ~150KB per JPEG at quality 85, 848×480
 ESTIMATED_DEPTH_SIZE = 820_000     # ~820KB per .npy (848×480 uint16)
-DISK_HEADROOM = 2_000_000_000      # Reserve 2GB free
+DISK_HEADROOM = 100_000_000        # Reserve 100MB free
 RECALC_AFTER_FRAMES = 30           # Recalculate frame limit from actual sizes
 
 # Cliff detection: sample the bottom CLIFF_BOTTOM_FRAC of the depth frame.
