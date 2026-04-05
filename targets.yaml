@@ -6,10 +6,13 @@
 targets:
   - name: cat
     priority: 0
-    confidence: 0.8
+    confidence: 0.7
   - name: dog
     priority: 1
-    confidence: 0.8
+    confidence: 0.7
+  - name: bear
+    priority: 1
+    confidence: 0.7
   - name: person
     priority: 2
     confidence: 0.8

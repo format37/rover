@@ -782,7 +782,10 @@ def main():
                 line = line.strip()
                 if not line:
                     continue
-                entry = json.loads(line)
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 ts = parse_timestamp(entry["timestamp"])
                 yolo_entries.append((ts, entry))
         yolo_entries.sort(key=lambda x: x[0])
@@ -797,7 +800,10 @@ def main():
                 line = line.strip()
                 if not line:
                     continue
-                entry = json.loads(line)
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 ts = parse_timestamp(entry["timestamp"])
                 servo_entries.append((ts, entry))
         servo_entries.sort(key=lambda x: x[0])
