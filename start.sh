@@ -78,10 +78,6 @@ wait_for_http "Servo API"     "http://localhost:8000/status" "$SERVO_PID"  60  "
 wait_for_http "Camera server" "http://localhost:8080/status" "$CAMERA_PID" 30  "$LOG_DIR/camera.log"
 wait_for_http "YOLO (warmup)" "http://localhost:8765/ready"  "$YOLO_PID"   120 "$LOG_DIR/yolo.log"
 
-# Activate RGB frame saving now that YOLO is warm
-echo "Activating frame saving..."
-curl -s -X POST http://localhost:8080/start-saving > /dev/null
-
 # 4. Detection server (depends on camera, YOLO, servo all being ready)
 echo "[4/5] Starting detection server..."
 cd "$SERVER_DIR"
@@ -100,6 +96,10 @@ echo "  PID=$BODY_PID"
 
 # Update pidfile
 echo "$YOLO_PID $SERVO_PID $CAMERA_PID $DETECTION_PID $BODY_PID" > "$PIDFILE"
+
+# Activate frame saving now that all processes are ready
+echo "Activating frame saving..."
+curl -s -X POST http://localhost:8080/start-saving > /dev/null
 
 echo ""
 echo "All processes started. Tailing body_follow log (Ctrl+C to stop monitoring)..."
