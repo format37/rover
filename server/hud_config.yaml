@@ -66,6 +66,9 @@ hud:
     edge_color: [0, 220, 255]           # gold
     edge_alpha: 0.9                     # edge opacity
 
+  # Session elapsed timer above HUD panel
+  session_timer: true
+
   # Debug: show source filenames/timestamps in bottom-left
   debug_sources: false
 

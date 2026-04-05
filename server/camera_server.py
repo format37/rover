@@ -5,6 +5,7 @@ frame and depth-based distance queries to clients via FastAPI.
 """
 
 import argparse
+import json
 import threading
 import time
 import queue
@@ -108,6 +109,14 @@ class CameraManager:
         self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self._capture_thread.start()
         self._writer_thread.start()
+
+        # Write session metadata (start time)
+        self._session_meta_path = self.session_path / "session.json"
+        self._session_meta = {
+            "session_start": self.session_start.isoformat(),
+            "session_end": None,
+        }
+        self._session_meta_path.write_text(json.dumps(self._session_meta, indent=2))
         print(f"Camera server started. Session: {self.session_path}")
 
     def _compute_frame_limit(self) -> int:
@@ -306,6 +315,10 @@ class CameraManager:
         self._capture_thread.join(timeout=3)
         self._writer_thread.join(timeout=3)
         self.pipeline.stop()
+
+        # Write session end time
+        self._session_meta["session_end"] = datetime.now().isoformat()
+        self._session_meta_path.write_text(json.dumps(self._session_meta, indent=2))
         print("Camera manager stopped")
 
 

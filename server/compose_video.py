@@ -705,7 +705,7 @@ def _draw_log_lines(frame, debug_info):
 
 def _process_frame(args):
     """Process a single frame (runs in worker process)."""
-    rgb_path, depth_path, detections, track_state, debug_info = args
+    rgb_path, depth_path, detections, track_state, debug_info, elapsed_sec = args
     frame = cv2.imread(rgb_path)
     if frame is None:
         return None
@@ -723,7 +723,8 @@ def _process_frame(args):
     if _worker_hud_cfg:
         hud_state = track_state or {"left_speed": 0, "left_dir": 0,
                                     "right_speed": 0, "right_dir": 0}
-        frame = draw_hud(frame, hud_state, depth_image, _worker_hud_cfg)
+        frame = draw_hud(frame, hud_state, depth_image, _worker_hud_cfg,
+                         elapsed_sec=elapsed_sec)
 
     if _worker_hud_cfg and _worker_hud_cfg.get("debug_sources"):
         _draw_debug_sources(frame, debug_info)
@@ -872,7 +873,8 @@ def main():
             print("WARNING: mesh3d requires open3d. Falling back to Delaunay.")
             mesh3d_cfg["enabled"] = False
         _init_worker(hud_cfg, mesh3d_cfg=mesh3d_cfg)
-        frame = _process_frame((rgb_path, depth_path, detections, track_state, debug_info))
+        elapsed = depth_ts - rgb_timestamps[0][0]
+        frame = _process_frame((rgb_path, depth_path, detections, track_state, debug_info, elapsed))
 
         out_base = args.output or f"/tmp/frame_{depth_name}.png"
         out_stem = out_base.rsplit(".", 1)[0]
@@ -965,6 +967,7 @@ def main():
     }
     has_servo = bool(servo_entries)
 
+    session_start_ts = rgb_timestamps[0][0]
     frame_args = []
     for rgb_ts, rgb_path in rgb_timestamps:
         depth_idx = find_closest(rgb_ts, depth_timestamps, args.max_depth_gap)
@@ -995,7 +998,8 @@ def main():
         }
         for name, entries in log_sources.items():
             debug_info[f"log_{name}"] = find_most_recent(rgb_ts, entries)
-        frame_args.append((str(rgb_path), depth_path, detections, track_state, debug_info))
+        elapsed_sec = rgb_ts - session_start_ts
+        frame_args.append((str(rgb_path), depth_path, detections, track_state, debug_info, elapsed_sec))
 
     # Parallel processing
     n_workers = args.workers if args.workers > 0 else min(os.cpu_count() or 4, 8)

@@ -222,11 +222,13 @@ def _draw_depth_map(frame, cx, cy, depth_image, cfg, color_cfg):
     frame[y0:y0 + size, x0:x0 + size] = canvas
 
 
-def draw_hud(frame: np.ndarray, track_state: dict, depth_image, cfg: dict) -> np.ndarray:
+def draw_hud(frame: np.ndarray, track_state: dict, depth_image, cfg: dict,
+             elapsed_sec: float = None) -> np.ndarray:
     """Draw HUD overlay: [left_track] [depth_map] [right_track].
 
     track_state keys: left_speed, left_dir, right_speed, right_dir
     depth_image: raw uint16 depth numpy array (mm units) or None
+    elapsed_sec: seconds since session start (shown as timer when session_timer enabled)
     """
     img_h, img_w = frame.shape[:2]
 
@@ -280,5 +282,19 @@ def draw_hud(frame: np.ndarray, track_state: dict, depth_image, cfg: dict) -> np
 
     rt_cx = panel_x + tc["width"] + gap + dm_size + gap + tc["width"] // 2
     _draw_track(frame, rt_cx, track_cy, right_vel, tc, color_cfg)
+
+    # Session timer
+    if elapsed_sec is not None and cfg.get("session_timer", True):
+        mins, secs = divmod(int(elapsed_sec), 60)
+        hrs, mins = divmod(mins, 60)
+        timer_text = f"{hrs:d}:{mins:02d}:{secs:02d}"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        fs = cfg["font_scale"]
+        ft = cfg["font_thickness"]
+        accent = _t(cfg["color_accent"])
+        (tw, th), _ = cv2.getTextSize(timer_text, font, fs, ft)
+        tx = panel_x + total_w - tw
+        ty = panel_y - panel_pad - 6
+        cv2.putText(frame, timer_text, (tx, ty), font, fs, accent, ft, cv2.LINE_AA)
 
     return frame
