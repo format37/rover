@@ -708,12 +708,17 @@ def _process_frame(args):
     rgb_path, depth_path, detections, track_state, debug_info, elapsed_sec = args
     frame = cv2.imread(rgb_path)
     if frame is None:
-        return None
+        return None, False
 
     depth_image = None
+    depth_skipped = False
     if depth_path is not None:
-        depth_image = np.load(depth_path)
-        if detections:
+        try:
+            depth_image = np.load(depth_path)
+        except ValueError:
+            depth_image = None
+            depth_skipped = True
+        if depth_image is not None and detections:
             h, w = frame.shape[:2]
             mesh_cfg = _worker_hud_cfg.get("mesh") if _worker_hud_cfg else None
             frame = draw_depth_overlay(frame, depth_image, detections,
@@ -730,7 +735,7 @@ def _process_frame(args):
         _draw_debug_sources(frame, debug_info)
         _draw_log_lines(frame, debug_info)
 
-    return frame
+    return frame, depth_skipped
 
 
 def main():
@@ -874,7 +879,7 @@ def main():
             mesh3d_cfg["enabled"] = False
         _init_worker(hud_cfg, mesh3d_cfg=mesh3d_cfg)
         elapsed = depth_ts - rgb_timestamps[0][0]
-        frame = _process_frame((rgb_path, depth_path, detections, track_state, debug_info, elapsed))
+        frame, _ = _process_frame((rgb_path, depth_path, detections, track_state, debug_info, elapsed))
 
         out_base = args.output or f"/tmp/frame_{depth_name}.png"
         out_stem = out_base.rsplit(".", 1)[0]
@@ -1027,11 +1032,14 @@ def main():
 
     t_start = time.time()
 
+    depth_skipped_count = 0
     with mp_ctx.Pool(n_workers, initializer=_init_worker,
                      initargs=(hud_cfg, mesh3d_cfg)) as pool:
-        for i, frame in enumerate(pool.imap(_process_frame, frame_args, chunksize=4)):
+        for i, (frame, depth_skipped) in enumerate(pool.imap(_process_frame, frame_args, chunksize=4)):
             if frame is not None:
                 writer.write(frame)
+            if depth_skipped:
+                depth_skipped_count += 1
             done = i + 1
             elapsed = time.time() - t_start
             speed = done / elapsed if elapsed > 0 else 0
@@ -1045,6 +1053,8 @@ def main():
     print(f"Duration: {duration:.1f}s, {len(rgb_timestamps)} frames, "
           f"{len(rgb_timestamps)/duration:.1f} actual fps")
     print(f"Composed in {total_time:.1f}s ({n_frames/total_time:.1f} compose fps)")
+    if depth_skipped_count > 0:
+        print(f"WARNING: {depth_skipped_count} depth frame(s) skipped (truncated/corrupt .npy files)")
 
 
 if __name__ == "__main__":

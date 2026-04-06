@@ -98,28 +98,28 @@ async def _inference_loop() -> None:
                 logger.warning(f"YOLO inference failed: {e}")
                 continue
 
-            # 3. Process detections above confidence threshold
+            # 3. Process all detections (depth only for high-confidence ones)
             detections: List[Detection] = []
             for d in yolo_result.get('detections', []):
-                if d['confidence'] < DETECTION_CONFIDENCE_MIN:
-                    continue
-
                 bbox = d['bbox']  # [x, y, w, h]
                 centroid_x = bbox[0] + bbox[2] / 2.0
                 centroid_x_norm = 1.0 - (centroid_x / frame_width)
 
-                # Depth at shrunk bbox
+                # Depth at shrunk bbox — only for confident detections to
+                # keep the loop fast; low-confidence ones are saved for
+                # offline analysis / HUD visualization with distance=None.
                 distance: Optional[float] = None
-                try:
-                    async with session.post(
-                            f"{CAMERA_SERVER_URL}/distance",
-                            json={"bbox": bbox, "shrink": DEPTH_BBOX_SHRINK},
-                            timeout=aiohttp.ClientTimeout(total=0.5)) as resp:
-                        if resp.status == 200:
-                            dist_data = await resp.json()
-                            distance = dist_data.get('distance')
-                except Exception as e:
-                    logger.warning(f"Depth query failed: {e}")
+                if d['confidence'] >= DETECTION_CONFIDENCE_MIN:
+                    try:
+                        async with session.post(
+                                f"{CAMERA_SERVER_URL}/distance",
+                                json={"bbox": bbox, "shrink": DEPTH_BBOX_SHRINK},
+                                timeout=aiohttp.ClientTimeout(total=0.5)) as resp:
+                            if resp.status == 200:
+                                dist_data = await resp.json()
+                                distance = dist_data.get('distance')
+                    except Exception as e:
+                        logger.warning(f"Depth query failed: {e}")
 
                 # Angular offset of object from rover forward axis (pixel-based only).
                 # positive = right of rover forward, negative = left.
