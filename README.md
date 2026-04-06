@@ -6,6 +6,10 @@ Autonomous object tracking system using 5 processes: camera capture, YOLO detect
 
 The detection server decouples YOLO inference from the control loop — the client polls a cached result at ~20fps without ever blocking on inference latency (~1fps on Jetson).
 
+## 3D Model
+
+Chassis: [Thingiverse — Thing 4091833](https://www.thingiverse.com/thing:4091833)
+
 ## Installation
 
 > **Required before first run:** Follow [`docs/installation.md`](docs/installation.md) to set up YOLO+OpenCV GPU support, the RealSense depth camera, and Wi-Fi on Jetson Nano. These cannot be installed via pip alone — both require source builds for the ARM architecture.
