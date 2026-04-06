@@ -1,5 +1,7 @@
 # Object Chaser
 
+[![Demo](https://img.youtube.com/vi/ZnRchWEvBJA/0.jpg)](https://youtu.be/ZnRchWEvBJA)
+
 Autonomous object tracking system using 5 processes: camera capture, YOLO detection, track control, a detection cache server, and client behavior logic.
 
 The detection server decouples YOLO inference from the control loop — the client polls a cached result at ~20fps without ever blocking on inference latency (~1fps on Jetson).
