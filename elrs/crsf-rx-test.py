@@ -34,7 +34,7 @@ CRSF_HANDSET = 0xEE
 CRSF_TYPE_RC = 0x16        # RC channels packed (16 ch × 11 bit)
 CRSF_TYPE_LINK = 0x14      # link statistics
 
-PRINT_INTERVAL = 1.0       # seconds
+PRINT_INTERVAL = 0.1       # seconds — 10 Hz status output
 BUF_HARD_LIMIT = 4096      # bytes — drop and resync if we ever exceed this
 
 
