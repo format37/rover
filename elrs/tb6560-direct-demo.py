@@ -14,8 +14,8 @@ Test sequence:
 Only one motor is energised at a time; the other is held stopped.
 
 Hardware (per elrs/docs/TB6560_ROVER_TECH_SPEC.md):
-    GPIO18 → TB6560 #1 CLK+  (STEP left  / motor 0) via NPN level shifter to 5V
-    GPIO12 → TB6560 #2 CLK+  (STEP right / motor 1) via NPN level shifter to 5V
+    GPIO18 → TB6560 #1 CLK+  (STEP left  / motor 0) via NPN level shifter to 5V  (PWM0)
+    GPIO13 → TB6560 #2 CLK+  (STEP right / motor 1) via NPN level shifter to 5V  (PWM1)
     GPIO23 → TB6560 #1 CW+   (DIR  left)            via NPN level shifter to 5V
     GPIO24 → TB6560 #2 CW+   (DIR  right)           via NPN level shifter to 5V
     EN+ pins tied to GND (always enabled) or unused.
@@ -28,8 +28,10 @@ import time
 import pigpio
 
 # --- Pin assignment ---
-STEP_LEFT  = 18   # hardware PWM0
-STEP_RIGHT = 12   # hardware PWM1
+# GPIO12 and GPIO18 BOTH map to PWM channel 0, so they cannot be driven
+# independently — use GPIO13 (PWM channel 1) for the right motor.
+STEP_LEFT  = 18   # hardware PWM channel 0
+STEP_RIGHT = 13   # hardware PWM channel 1
 DIR_LEFT   = 23
 DIR_RIGHT  = 24
 

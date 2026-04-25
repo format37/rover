@@ -19,8 +19,8 @@ Safety:
     Ctrl-C and any exception path stops motors before exit.
 
 Hardware (per elrs/docs/TB6560_ROVER_TECH_SPEC.md):
-    GPIO18 → TB6560 #1 CLK+  (STEP motor 0 / left)
-    GPIO12 → TB6560 #2 CLK+  (STEP motor 1 / right)
+    GPIO18 → TB6560 #1 CLK+  (STEP motor 0 / left)   — PWM channel 0
+    GPIO13 → TB6560 #2 CLK+  (STEP motor 1 / right)  — PWM channel 1
     GPIO23 → TB6560 #1 CW+   (DIR  motor 0)
     GPIO24 → TB6560 #2 CW+   (DIR  motor 1)
     GPIO15 ← ELRS RX TX (CRSF @ 420 kbaud, /dev/serial0)
@@ -48,8 +48,10 @@ CRSF_TYPE_RC = 0x16
 CRSF_TYPE_LINK = 0x14
 
 # --- Stepper pins (match tb6560-direct-demo.py) ---
-STEP_LEFT = 18      # motor 0
-STEP_RIGHT = 12     # motor 1
+# GPIO12 and GPIO18 share PWM channel 0 on the BCM2835/2837 — they cannot
+# be driven independently. Use GPIO13 (PWM channel 1) for the right motor.
+STEP_LEFT = 18      # motor 0 — PWM channel 0
+STEP_RIGHT = 13     # motor 1 — PWM channel 1
 DIR_LEFT = 23
 DIR_RIGHT = 24
 

@@ -147,7 +147,7 @@ At 1/16 microstepping, 300 RPM requires 16kHz — right at the limit.
 |------------------|-------------------|--------------|--------------------------|
 | RPi.GPIO toggle  | <5 kHz            | 50–200μs     | Unusable for steppers    |
 | pigpio software  | ~25 kHz           | <5μs         | DMA-based, CPU-independent|
-| pigpio hardware  | >1 MHz            | <1μs         | GPIO12/18 only (2 ch)    |
+| pigpio hardware  | >1 MHz            | <1μs         | one channel per pin: GPIO12+18 share PWM0, GPIO13+19 share PWM1 |
 
 **pigpio DMA wave generation at 8kHz: trivially achievable.** The DMA engine
 runs independently of the CPU, so CRSF parsing in Python doesn't affect
@@ -176,12 +176,15 @@ handles CRSF parsing and speed/direction mapping. These are decoupled.
 | GPIO14   | TXD     | (unused or telemetry back to ELRS) | — |
 | GPIO15   | RXD     | CRSF receive     | ELRS RX TX pin        |
 | GPIO18   | PWM0    | STEP left motor  | TB6560 #1 CLK+ (via level shifter) |
-| GPIO12   | PWM1    | STEP right motor | TB6560 #2 CLK+ (via level shifter) |
+| GPIO13   | PWM1    | STEP right motor | TB6560 #2 CLK+ (via level shifter) |
 | GPIO23   | —       | DIR left motor   | TB6560 #1 CW+ (via level shifter)  |
 | GPIO24   | —       | DIR right motor  | TB6560 #2 CW+ (via level shifter)  |
 | GND      | —       | Common ground    | TB6560 CLK-/CW-/EN-, ELRS GND      |
 
-GPIO18 and GPIO12 are the two hardware PWM channels — ideal for step pulses.
+GPIO18 (PWM0) and GPIO13 (PWM1) drive the two hardware PWM channels — ideal for
+independent step pulses. **Do not use GPIO12 alongside GPIO18**: they both map to
+PWM channel 0, so reprogramming either reprograms both pins, and the second motor
+will mirror the first. Use a PWM1 pin (GPIO13 or GPIO19) for the right motor.
 
 ---
 
@@ -206,8 +209,8 @@ GPIO18 and GPIO12 are the two hardware PWM channels — ideal for step pulses.
 │                         │                   │
 │  ┌──────────────────────┴──────────────────┐│
 │  │ pigpio daemon (C, DMA)                  ││
-│  │ GPIO18: HW PWM → step pulses left      ││
-│  │ GPIO12: HW PWM → step pulses right     ││
+│  │ GPIO18: HW PWM0 → step pulses left     ││
+│  │ GPIO13: HW PWM1 → step pulses right    ││
 │  │ GPIO23: write → DIR left               ││
 │  │ GPIO24: write → DIR right              ││
 │  └─────────────────────────────────────────┘│
@@ -253,7 +256,7 @@ def mix(throttle: float, steering: float) -> tuple:
 import pigpio
 
 STEP_LEFT  = 18   # HW PWM channel 0
-STEP_RIGHT = 12   # HW PWM channel 1
+STEP_RIGHT = 13   # HW PWM channel 1
 DIR_LEFT   = 23
 DIR_RIGHT  = 24
 
