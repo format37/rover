@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """
-TB6560 dual-stepper demo: front / back / left / right, 1 second each.
+TB6560 dual-stepper isolation demo: drive each motor by itself, both
+directions, 1 second each. If any of the four steps misbehaves while
+the others work, the issue is on that side's wiring/driver — not the
+mixer or radio path.
+
+Test sequence:
+    1. stepper 0 (left)  forward
+    2. stepper 0 (left)  backward
+    3. stepper 1 (right) forward
+    4. stepper 1 (right) backward
+
+Only one motor is energised at a time; the other is held stopped.
 
 Hardware (per elrs/docs/TB6560_ROVER_TECH_SPEC.md):
-    GPIO18 → TB6560 #1 CLK+  (STEP left)   via NPN level shifter to 5V
-    GPIO12 → TB6560 #2 CLK+  (STEP right)  via NPN level shifter to 5V
-    GPIO23 → TB6560 #1 CW+   (DIR  left)   via NPN level shifter to 5V
-    GPIO24 → TB6560 #2 CW+   (DIR  right)  via NPN level shifter to 5V
+    GPIO18 → TB6560 #1 CLK+  (STEP left  / motor 0) via NPN level shifter to 5V
+    GPIO12 → TB6560 #2 CLK+  (STEP right / motor 1) via NPN level shifter to 5V
+    GPIO23 → TB6560 #1 CW+   (DIR  left)            via NPN level shifter to 5V
+    GPIO24 → TB6560 #2 CW+   (DIR  right)           via NPN level shifter to 5V
     EN+ pins tied to GND (always enabled) or unused.
     Common GND between RPi, both TB6560s, and 5V rail.
 
@@ -54,9 +65,12 @@ def stop(pi):
     pi.hardware_PWM(STEP_RIGHT, 0, 0)
 
 
-def drive(pi, left_dir: int, right_dir: int, seconds: float = MOVE_SECONDS):
-    set_motor(pi, STEP_LEFT,  DIR_LEFT,  left_dir,  STEP_FREQ)
-    set_motor(pi, STEP_RIGHT, DIR_RIGHT, right_dir, STEP_FREQ)
+def drive_one(pi, step_pin: int, dir_pin: int, dir_level: int,
+              seconds: float = MOVE_SECONDS):
+    """Run one motor at STEP_FREQ; explicitly hold the other stopped."""
+    other_step = STEP_RIGHT if step_pin == STEP_LEFT else STEP_LEFT
+    pi.hardware_PWM(other_step, 0, 0)
+    set_motor(pi, step_pin, dir_pin, dir_level, STEP_FREQ)
     time.sleep(seconds)
     stop(pi)
 
@@ -70,13 +84,17 @@ def main():
         pi.set_mode(pin, pigpio.OUTPUT)
 
     try:
-        print("FRONT"); drive(pi, FORWARD_LEFT,      FORWARD_RIGHT)
-        time.sleep(0.3)
-        print("BACK");  drive(pi, 1 - FORWARD_LEFT,  1 - FORWARD_RIGHT)
-        time.sleep(0.3)
-        print("LEFT (CCW)");  drive(pi, 1 - FORWARD_LEFT, FORWARD_RIGHT)
-        time.sleep(0.3)
-        print("RIGHT (CW)");  drive(pi, FORWARD_LEFT,     1 - FORWARD_RIGHT)
+        print("stepper 0 (left)  FORWARD")
+        drive_one(pi, STEP_LEFT,  DIR_LEFT,  FORWARD_LEFT)
+        time.sleep(0.5)
+        print("stepper 0 (left)  BACKWARD")
+        drive_one(pi, STEP_LEFT,  DIR_LEFT,  1 - FORWARD_LEFT)
+        time.sleep(0.5)
+        print("stepper 1 (right) FORWARD")
+        drive_one(pi, STEP_RIGHT, DIR_RIGHT, FORWARD_RIGHT)
+        time.sleep(0.5)
+        print("stepper 1 (right) BACKWARD")
+        drive_one(pi, STEP_RIGHT, DIR_RIGHT, 1 - FORWARD_RIGHT)
     finally:
         stop(pi)
         pi.stop()
