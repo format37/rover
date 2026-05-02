@@ -59,6 +59,7 @@ MIN_FREQ = 200      # Hz floor when commanded > 0
 DEADBAND_US = 30    # ±µs around 1500 → axis treated as 0
 HALF_RANGE_US = 500
 DUTY_CYCLE = 500000
+MODE_THRESHOLD_US = 1500    # CH_MODE > threshold → drivers always enabled (FIXED)
 
 # --- Safety ---
 FAILSAFE_TIMEOUT = 0.5
@@ -216,6 +217,7 @@ def main():
             link_alive = (now - last_rc_time) < FAILSAFE_TIMEOUT
 
             mode_us = to_us(last_chans[CH_MODE - 1])
+            mode_fixed = mode_us > MODE_THRESHOLD_US
             if link_alive:
                 thr_us = to_us(last_chans[CH_THROTTLE - 1])
                 steer_us = to_us(last_chans[CH_STEER - 1])
@@ -223,7 +225,8 @@ def main():
                 steering = channel_to_signed(steer_us)
                 left  = max(-1.0, min(1.0, throttle + steering))
                 right = max(-1.0, min(1.0, throttle - steering))
-                en_state = set_enable(pi, left != 0.0 or right != 0.0, en_state)
+                moving = left != 0.0 or right != 0.0
+                en_state = set_enable(pi, mode_fixed or moving, en_state)
                 f_left = set_track(pi, STEP_LEFT,  DIR_LEFT,  FORWARD_LEFT,  left)
                 f_right = set_track(pi, STEP_RIGHT, DIR_RIGHT, FORWARD_RIGHT, right)
             else:
@@ -240,7 +243,7 @@ def main():
                 en = "EN" if en_state else "--"
                 print(
                     f"[{state}] {en} "
-                    f"ch{CH_MODE}={mode_us:4d} "
+                    f"ch{CH_MODE}={mode_us:4d}({'FX' if mode_fixed else 'GT'}) "
                     f"→ L={left:+5.2f}({f_left:+5d}Hz)  R={right:+5.2f}({f_right:+5d}Hz)  "
                     f"rc={frames_rc/dt:4.1f}/s LQ={last_lq if last_lq is not None else '--'} "
                     f"age={age:5.0f}ms",
