@@ -151,11 +151,15 @@ def main():
                 dt = now - last_print
                 steer_us = to_us(last_chans[CH_STEER - 1])
                 thr_us = to_us(last_chans[CH_THROTTLE - 1])
+                aux = " ".join(
+                    f"ch{n}={to_us(last_chans[n - 1]):4d}" for n in (5, 6, 7, 8)
+                )
                 lq = last_lq if last_lq is not None else "--"
                 print(
                     f"B/s={bytes_in/dt:5.0f}  rc={frames_rc/dt:5.1f}/s  "
                     f"link={frames_link/dt:4.1f}/s  LQ={lq}  "
                     f"steer={steer_us:4d}µs  thr={thr_us:4d}µs  "
+                    f"{aux}  "
                     f"bad_crc={bad_crc}  buf={len(buf)}  ovf={overflows}",
                     flush=True,
                 )
