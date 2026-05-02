@@ -34,6 +34,7 @@ BAUD = 420000
 
 CH_STEER = 1       # 1-indexed
 CH_THROTTLE = 2
+CH_MODE = 5        # mode switch: always-on vs movement-gated EN
 
 CRSF_SYNC = 0xC8
 CRSF_HANDSET = 0xEE
@@ -214,6 +215,7 @@ def main():
             now = time.monotonic()
             link_alive = (now - last_rc_time) < FAILSAFE_TIMEOUT
 
+            mode_us = to_us(last_chans[CH_MODE - 1])
             if link_alive:
                 thr_us = to_us(last_chans[CH_THROTTLE - 1])
                 steer_us = to_us(last_chans[CH_STEER - 1])
@@ -227,7 +229,6 @@ def main():
             else:
                 stop_tracks(pi)
                 en_state = set_enable(pi, False, en_state)
-                thr_us = steer_us = 1500
                 throttle = steering = 0.0
                 left = right = 0.0
                 f_left = f_right = 0
@@ -239,7 +240,7 @@ def main():
                 en = "EN" if en_state else "--"
                 print(
                     f"[{state}] {en} "
-                    f"thr={thr_us:4d} steer={steer_us:4d} "
+                    f"ch{CH_MODE}={mode_us:4d} "
                     f"→ L={left:+5.2f}({f_left:+5d}Hz)  R={right:+5.2f}({f_right:+5d}Hz)  "
                     f"rc={frames_rc/dt:4.1f}/s LQ={last_lq if last_lq is not None else '--'} "
                     f"age={age:5.0f}ms",
