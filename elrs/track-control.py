@@ -45,7 +45,8 @@ STEP_LEFT = 18      # PWM channel 0
 STEP_RIGHT = 13     # PWM channel 1
 DIR_LEFT = 23
 DIR_RIGHT = 24
-STEPPER_EN = 25     # NPN base; HIGH → TB6560 EN− pulled to GND → drivers enabled
+STEPPER_EN = 25
+EN_ACTIVE = 0       # GPIO level that enables the drivers (flip if wiring inverts)
 
 DIR_INVERTED = True
 FORWARD_LEFT = 1
@@ -136,7 +137,7 @@ def stop_tracks(pi):
 def set_enable(pi, state, current):
     """Drive STEPPER_EN only when state changes. Returns new state."""
     if state != current:
-        pi.write(STEPPER_EN, 1 if state else 0)
+        pi.write(STEPPER_EN, EN_ACTIVE if state else 1 - EN_ACTIVE)
     return state
 
 
@@ -146,7 +147,7 @@ def main():
         sys.exit("pigpiod not running — sudo systemctl start pigpiod")
     for pin in (STEP_LEFT, STEP_RIGHT, DIR_LEFT, DIR_RIGHT, STEPPER_EN):
         pi.set_mode(pin, pigpio.OUTPUT)
-    pi.write(STEPPER_EN, 0)
+    pi.write(STEPPER_EN, 1 - EN_ACTIVE)
     stop_tracks(pi)
 
     try:
@@ -251,7 +252,7 @@ def main():
         pass
     finally:
         stop_tracks(pi)
-        pi.write(STEPPER_EN, 0)
+        pi.write(STEPPER_EN, 1 - EN_ACTIVE)
         ser.close()
         pi.stop()
 
