@@ -54,7 +54,7 @@ FORWARD_LEFT = 1
 FORWARD_RIGHT = 0
 
 # --- Speed mapping ---
-MAX_FREQ = 4000     # Hz at full deflection
+MAX_FREQ = 800      # Hz at full deflection (capped below stepper pullin)
 MIN_FREQ = 200      # Hz floor when commanded > 0
 DEADBAND_US = 30    # ±µs around 1500 → axis treated as 0
 HALF_RANGE_US = 500
