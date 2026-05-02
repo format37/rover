@@ -12,7 +12,7 @@ See `docs/TB6560_ROVER_TECH_SPEC.md` for the full wiring spec and
 | RPi GPIO | TB6560 pin          | Role              |
 |----------|---------------------|-------------------|
 | GPIO18   | #1 CLK+ (PWM0)      | STEP left         |
-| GPIO12   | #2 CLK+ (PWM1)      | STEP right        |
+| GPIO13   | #2 CLK+ (PWM1)      | STEP right        |
 | GPIO23   | #1 CW+              | DIR  left         |
 | GPIO24   | #2 CW+              | DIR  right        |
 | GND      | #1/#2 CLK-, CW-, EN-| common ground     |

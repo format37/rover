@@ -10,7 +10,7 @@ receiver on UART. See `wiring-diagram.py` for the schematic source.
 | ELRS TX → RPi RX  | GPIO15   | 10         | CRSF data in (required)        |
 | ELRS RX ← RPi TX  | GPIO14   | 8          | Telemetry back (optional)      |
 | STEP left         | GPIO18   | 12         | PWM0 (hardware PWM)            |
-| STEP right        | GPIO12   | 32         | PWM1 (hardware PWM)            |
+| STEP right        | GPIO13   | 33         | PWM1 (hardware PWM)            |
 | DIR left          | GPIO23   | 16         | Through NPN level shifter      |
 | DIR right         | GPIO24   | 18         | Through NPN level shifter      |
 | 5V to ELRS        | 5V       | 2 or 4     |                                |
