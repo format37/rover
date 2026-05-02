@@ -45,6 +45,7 @@ STEP_LEFT = 18      # PWM channel 0
 STEP_RIGHT = 13     # PWM channel 1
 DIR_LEFT = 23
 DIR_RIGHT = 24
+STEPPER_EN = 25     # NPN base; HIGH → TB6560 EN− pulled to GND → drivers enabled
 
 DIR_INVERTED = True
 FORWARD_LEFT = 1
@@ -132,12 +133,20 @@ def stop_tracks(pi):
     pi.hardware_PWM(STEP_RIGHT, 0, 0)
 
 
+def set_enable(pi, state, current):
+    """Drive STEPPER_EN only when state changes. Returns new state."""
+    if state != current:
+        pi.write(STEPPER_EN, 1 if state else 0)
+    return state
+
+
 def main():
     pi = pigpio.pi()
     if not pi.connected:
         sys.exit("pigpiod not running — sudo systemctl start pigpiod")
-    for pin in (STEP_LEFT, STEP_RIGHT, DIR_LEFT, DIR_RIGHT):
+    for pin in (STEP_LEFT, STEP_RIGHT, DIR_LEFT, DIR_RIGHT, STEPPER_EN):
         pi.set_mode(pin, pigpio.OUTPUT)
+    pi.write(STEPPER_EN, 0)
     stop_tracks(pi)
 
     try:
@@ -152,6 +161,7 @@ def main():
     last_rc_time = 0.0
     last_print = time.monotonic()
     frames_rc = 0
+    en_state = False
 
     print(f"track-control  thr=ch{CH_THROTTLE}  steer=ch{CH_STEER}  "
           f"max={MAX_FREQ}Hz  failsafe={int(FAILSAFE_TIMEOUT*1000)}ms  "
@@ -210,10 +220,12 @@ def main():
                 steering = channel_to_signed(steer_us)
                 left  = max(-1.0, min(1.0, throttle + steering))
                 right = max(-1.0, min(1.0, throttle - steering))
+                en_state = set_enable(pi, left != 0.0 or right != 0.0, en_state)
                 f_left = set_track(pi, STEP_LEFT,  DIR_LEFT,  FORWARD_LEFT,  left)
                 f_right = set_track(pi, STEP_RIGHT, DIR_RIGHT, FORWARD_RIGHT, right)
             else:
                 stop_tracks(pi)
+                en_state = set_enable(pi, False, en_state)
                 thr_us = steer_us = 1500
                 throttle = steering = 0.0
                 left = right = 0.0
@@ -223,8 +235,9 @@ def main():
                 dt = now - last_print
                 age = (now - last_rc_time) * 1000 if last_rc_time else 9999
                 state = "OK     " if link_alive else "FAILSAFE"
+                en = "EN" if en_state else "--"
                 print(
-                    f"[{state}] "
+                    f"[{state}] {en} "
                     f"thr={thr_us:4d} steer={steer_us:4d} "
                     f"→ L={left:+5.2f}({f_left:+5d}Hz)  R={right:+5.2f}({f_right:+5d}Hz)  "
                     f"rc={frames_rc/dt:4.1f}/s LQ={last_lq if last_lq is not None else '--'} "
@@ -238,6 +251,7 @@ def main():
         pass
     finally:
         stop_tracks(pi)
+        pi.write(STEPPER_EN, 0)
         ser.close()
         pi.stop()
 
