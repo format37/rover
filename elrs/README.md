@@ -127,6 +127,31 @@ Key detail: ELRS **TX** goes to RPi **RX** (GPIO15), and vice versa — crossed,
 
 # Running track control
 
+## Stick mapping
+
+| Channel | Role | Behaviour |
+|---|---|---|
+| ch1 | Steer | differential turn (left/right) |
+| ch2 | Throttle | instantaneous forward/back |
+| ch3 | Cruise | signed throttle **floor** — see below |
+| ch5 | Mode | EN policy: FIXED (always on) vs GATED (move-only) |
+
+**Cruise (ch3)** holds a continuous minimum speed hands-off:
+
+- `ch3 = 0` → no effect, normal ch1/ch2 stick driving
+- `ch3 > 0` → continuous forward; ch2 can add more, but pulling ch2 back
+  cannot go below the ch3 level (clamped, not an override)
+- `ch3 < 0` → continuous reverse, same rule
+
+The floor is applied to the common throttle *before* steering is mixed, so
+ch1 still differentiates the tracks to turn while cruising (one track may
+briefly drop below the floor on sharp turns — by design, so it can steer).
+Status line shows it as `cr=±x.xx`. ch3 is expected to be the
+non-centering throttle stick (it holds position); a spring-centered
+channel works too but won't "hold" cruise when released.
+
+## Service
+
 `track-control.py` is **not** run manually in production — it runs as a
 systemd service that starts at boot, ordered after `pigpiod`, and auto-restarts
 on failure. The unit is version-controlled at `elrs/track-control.service`.
