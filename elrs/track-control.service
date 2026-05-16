@@ -1,0 +1,29 @@
+# Deployed on the RPi Zero W at /etc/systemd/system/track-control.service
+# Install:
+#   sudo cp elrs/track-control.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now track-control.service
+#
+# NOTE: paths below assume the repo is checked out at /home/alex/rover on the
+# Pi (NOT ~/projects/rover, which is the dev-machine layout). Adjust
+# WorkingDirectory/ExecStart if you clone elsewhere.
+
+[Unit]
+Description=ELRS tank track control
+After=pigpiod.service
+Wants=pigpiod.service
+
+[Service]
+Type=simple
+User=alex
+Group=alex
+SupplementaryGroups=dialout gpio
+WorkingDirectory=/home/alex/rover/elrs
+ExecStart=/usr/bin/python3 /home/alex/rover/elrs/track-control.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

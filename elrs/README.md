@@ -124,3 +124,38 @@ pi.stop()
 | GND | GND | Pin 6 |
 
 Key detail: ELRS **TX** goes to RPi **RX** (GPIO15), and vice versa — crossed, not straight. For our rover you only strictly need one wire: ELRS TX → RPi RXD (receiving channel data). The second wire (RPi TXD → ELRS RX) is for telemetry back to your radio — nice to have for battery voltage display, but optional for v1.
+
+# Running track control
+
+`track-control.py` is **not** run manually in production — it runs as a
+systemd service that starts at boot, ordered after `pigpiod`, and auto-restarts
+on failure. The unit is version-controlled at `elrs/track-control.service`.
+
+> **Path note:** the unit assumes the repo is checked out at `/home/alex/rover`
+> on the Pi (the dev machine uses `~/projects/rover`). Edit
+> `WorkingDirectory`/`ExecStart` in the unit if you clone elsewhere.
+
+### Install / update the service
+
+```bash
+sudo cp elrs/track-control.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now track-control.service
+```
+
+### Operate
+
+```bash
+systemctl status track-control.service          # is it running?
+sudo systemctl restart track-control.service    # after a git pull
+sudo systemctl stop track-control.service        # before manual testing
+journalctl -u track-control.service -f           # live status / CRSF log
+```
+
+To run the script by hand (e.g. tuning), **stop the service first** so two
+processes don't fight over `/dev/serial0` and the GPIO pins:
+
+```bash
+sudo systemctl stop track-control.service
+python3 track-control.py
+```

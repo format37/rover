@@ -317,6 +317,20 @@ dtoverlay=disable-bt
 enable_uart=1
 ```
 
+### Service
+
+`track-control.py` runs as a systemd service (`track-control.service`,
+version-controlled in `elrs/`), not manually:
+
+- `After=`/`Wants=pigpiod.service` — starts only after the pigpio daemon is up
+- `Restart=on-failure`, `RestartSec=3` — auto-recovers from a crash
+- `WantedBy=multi-user.target` — starts at boot
+- Runs as user `alex`, groups `dialout` (serial) + `gpio`
+- stdout/stderr → journal (`journalctl -u track-control.service`)
+
+See `elrs/README.md` → "Running track control" for install/operate commands.
+Note the unit hardcodes `/home/alex/rover/elrs` as the deployed path.
+
 ---
 
 ## Risk Register
