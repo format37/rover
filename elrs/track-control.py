@@ -5,8 +5,17 @@ Differential ("tank") track control from a single ELRS right-stick.
 Stick mapping (Mode 2 / AETR):
     Y axis (CH_THROTTLE, default ch2): forward / backward
     X axis (CH_STEER,    default ch1): turn right / left
+    CH_CRUISE   (default ch3): signed cruise / throttle floor
+
+Cruise (ch3) sets a continuous minimum speed the rover holds hands-off:
+    ch3 = 0   → no effect, normal stick control
+    ch3 > 0   → continuous forward; ch2 can add more but not go below it
+    ch3 < 0   → continuous reverse; ch2 can add more but not go below it
+The floor is applied to the common throttle *before* steering is mixed,
+so ch1 can still differentiate the tracks to turn while cruising.
 
 Differential mixer:
+    throttle = cruise-floored ch2
     left  = throttle + steering   (clamped to [-1, 1])
     right = throttle - steering
 
@@ -34,6 +43,7 @@ BAUD = 420000
 
 CH_STEER = 1       # 1-indexed
 CH_THROTTLE = 2
+CH_CRUISE = 3      # signed cruise / throttle floor
 CH_MODE = 5        # mode switch: always-on vs movement-gated EN
 
 CRSF_SYNC = 0xC8
@@ -167,6 +177,7 @@ def main():
     en_state = False
 
     print(f"track-control  thr=ch{CH_THROTTLE}  steer=ch{CH_STEER}  "
+          f"cruise=ch{CH_CRUISE}  "
           f"max={MAX_FREQ}Hz  failsafe={int(FAILSAFE_TIMEOUT*1000)}ms  "
           f"deadband=±{DEADBAND_US}µs")
 
@@ -221,8 +232,16 @@ def main():
             if link_alive:
                 thr_us = to_us(last_chans[CH_THROTTLE - 1])
                 steer_us = to_us(last_chans[CH_STEER - 1])
+                cruise_us = to_us(last_chans[CH_CRUISE - 1])
                 throttle = channel_to_signed(thr_us)
                 steering = channel_to_signed(steer_us)
+                cruise = channel_to_signed(cruise_us)
+                # ch3 sets a signed floor on the common throttle: the rover
+                # never goes slower than `cruise` in cruise's direction.
+                if cruise > 0.0:
+                    throttle = max(throttle, cruise)
+                elif cruise < 0.0:
+                    throttle = min(throttle, cruise)
                 left  = max(-1.0, min(1.0, throttle + steering))
                 right = max(-1.0, min(1.0, throttle - steering))
                 moving = left != 0.0 or right != 0.0
@@ -232,7 +251,7 @@ def main():
             else:
                 stop_tracks(pi)
                 en_state = set_enable(pi, False, en_state)
-                throttle = steering = 0.0
+                throttle = steering = cruise = 0.0
                 left = right = 0.0
                 f_left = f_right = 0
 
@@ -244,6 +263,7 @@ def main():
                 print(
                     f"[{state}] {en} "
                     f"ch{CH_MODE}={mode_us:4d}({'FX' if mode_fixed else 'GT'}) "
+                    f"cr={cruise:+4.2f} "
                     f"→ L={left:+5.2f}({f_left:+5d}Hz)  R={right:+5.2f}({f_right:+5d}Hz)  "
                     f"rc={frames_rc/dt:4.1f}/s LQ={last_lq if last_lq is not None else '--'} "
                     f"age={age:5.0f}ms",
