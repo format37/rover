@@ -150,6 +150,27 @@ Status line shows it as `cr=±x.xx`. ch3 is expected to be the
 non-centering throttle stick (it holds position); a spring-centered
 channel works too but won't "hold" cruise when released.
 
+## Speed mapping
+
+Stick deflection maps to step frequency through an expo curve, then a
+slew-rate limiter ramps the *applied* frequency toward that target
+(constants in `track-control.py`):
+
+- `MIN_FREQ` (10 Hz) — slowest commandable crawl, right past the deadband
+- `MAX_FREQ` (8000 Hz) — full deflection; ≈300 RPM at 1/8 microstep, under
+  the TB6560's 15 kHz optocoupler limit
+- `FREQ_EXPO` (2.0) — quadratic curve: half stick ≈ 2 kHz, full stick
+  8 kHz, so the lower half of the stick keeps fine low-speed resolution
+- `ACCEL_HZ_PER_S` (4000) / `DECEL_HZ_PER_S` (16000) — ramp slopes. The
+  ramp is what makes 8 kHz reachable at all: a stepper stalls if asked to
+  jump from standstill past its pull-in rate (~800 Hz on this build, the
+  old hard cap). Direction reversals decelerate through zero first.
+  Failsafe still cuts the step pulses instantly — no ramp-down.
+
+Tuning on hardware: if the top end stalls under load, lower `MAX_FREQ` to
+the highest frequency the motors hold at full stick; if the ramp feels
+sluggish, raise `ACCEL_HZ_PER_S` (too high re-introduces start-up stalls).
+
 ## Service
 
 `track-control.py` is **not** run manually in production — it runs as a

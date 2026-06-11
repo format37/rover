@@ -19,6 +19,14 @@ Differential mixer:
     left  = throttle + steering   (clamped to [-1, 1])
     right = throttle - steering
 
+Speed mapping:
+    stick value → |x|^FREQ_EXPO curve → target step Hz in [MIN_FREQ, MAX_FREQ]
+    A slew-rate limiter (ACCEL_HZ_PER_S up, DECEL_HZ_PER_S down) ramps the
+    applied frequency toward the target — that ramp is what lets MAX_FREQ sit
+    far above the stepper pull-in rate (~800 Hz on this build) without
+    stalling from standstill. Direction reversals decelerate through zero
+    first. Failsafe stops instantly, no ramp.
+
 Resulting behaviour:
     stick up         → both tracks forward                → rover forward
     stick down       → both tracks backward               → rover backward
@@ -64,8 +72,17 @@ FORWARD_LEFT = 1
 FORWARD_RIGHT = 0
 
 # --- Speed mapping ---
-MAX_FREQ = 800      # Hz at full deflection (capped below stepper pullin)
-MIN_FREQ = 200      # Hz floor when commanded > 0
+# MAX_FREQ is the 1/8-microstep hardware budget (TB6560 opto limit 15 kHz,
+# ≈300 RPM at 8 kHz). It is reachable from standstill only because of the
+# accel ramp below — without it anything past ~800 Hz stalls (pull-in limit).
+# If the top end stalls under load, lower MAX_FREQ to the highest frequency
+# the motors hold at full stick.
+MAX_FREQ = 8000     # Hz at full deflection
+MIN_FREQ = 10       # Hz at the deadband edge — slowest commandable crawl
+FREQ_EXPO = 2.0     # stick→Hz curve: 1.0 = linear, >1 = finer low-speed control
+ACCEL_HZ_PER_S = 4000   # ramp-up slope; keeps starts below the pull-in limit
+DECEL_HZ_PER_S = 16000  # ramp-down slope (failsafe still stops instantly)
+RAMP_DT_MAX = 0.05  # s — clamp loop hiccups so one tick can't jump past pull-in
 DEADBAND_US = 30    # ±µs around 1500 → axis treated as 0
 HALF_RANGE_US = 500
 DUTY_CYCLE = 500000
@@ -115,12 +132,53 @@ def to_us(v: int) -> int:
 
 
 def channel_to_signed(us: int) -> float:
-    """µs → signed [-1, 1]. Inside ±DEADBAND_US returns exactly 0.0."""
+    """µs → signed [-1, 1]. Inside ±DEADBAND_US returns exactly 0.0.
+
+    Rescaled so the deadband edge maps to 0.0 (continuous, no jump) and
+    full deflection to ±1.0.
+    """
     delta = us - 1500
     if abs(delta) < DEADBAND_US:
         return 0.0
-    val = delta / HALF_RANGE_US
-    return max(-1.0, min(1.0, val))
+    val = min(1.0, (abs(delta) - DEADBAND_US) / (HALF_RANGE_US - DEADBAND_US))
+    return val if delta > 0 else -val
+
+
+def signed_to_freq(signed: float) -> float:
+    """Signed [-1, 1] → signed target step frequency in Hz.
+
+    Magnitude follows MIN_FREQ + (MAX_FREQ - MIN_FREQ) * |signed|^FREQ_EXPO,
+    so the whole usable band is on the stick with extra resolution down low.
+    """
+    if signed == 0.0:
+        return 0.0
+    mag = MIN_FREQ + (MAX_FREQ - MIN_FREQ) * abs(signed) ** FREQ_EXPO
+    return mag if signed > 0 else -mag
+
+
+def slew_freq(current: float, target: float, dt: float) -> float:
+    """Slope-limit the signed step frequency.
+
+    Magnitude rises at most ACCEL_HZ_PER_S and falls at most DECEL_HZ_PER_S
+    per second; a direction change decelerates through zero first, spending
+    any leftover tick time accelerating the other way.
+    """
+    dt = min(dt, RAMP_DT_MAX)
+    if dt <= 0.0:
+        return current
+    if current != 0.0 and (target == 0.0 or (current > 0) != (target > 0)):
+        drop = DECEL_HZ_PER_S * dt
+        if abs(current) > drop:
+            return current - drop if current > 0 else current + drop
+        dt -= abs(current) / DECEL_HZ_PER_S
+        current = 0.0
+        if target == 0.0:
+            return 0.0
+    if abs(target) > abs(current):
+        rise = ACCEL_HZ_PER_S * dt
+        return min(target, current + rise) if target > 0 else max(target, current - rise)
+    drop = DECEL_HZ_PER_S * dt
+    return max(target, current - drop) if target > 0 else min(target, current + drop)
 
 
 def apply_dir(level: int) -> int:
@@ -128,15 +186,15 @@ def apply_dir(level: int) -> int:
 
 
 def set_track(pi, step_pin: int, dir_pin: int, motor_forward: int,
-              signed_speed: float) -> int:
-    """signed_speed ∈ [-1, 1]. Returns applied step Hz (signed for direction)."""
-    if signed_speed == 0.0:
+              freq_signed: float) -> int:
+    """freq_signed: signed step Hz, already slew-limited. Returns applied Hz."""
+    freq = int(round(abs(freq_signed)))
+    if freq == 0:
         pi.hardware_PWM(step_pin, 0, 0)
         return 0
-    want_forward = signed_speed > 0
+    want_forward = freq_signed > 0
     logical = motor_forward if want_forward else (1 - motor_forward)
     pi.write(dir_pin, apply_dir(logical))
-    freq = max(MIN_FREQ, int(abs(signed_speed) * MAX_FREQ))
     pi.hardware_PWM(step_pin, freq, DUTY_CYCLE)
     return freq if want_forward else -freq
 
@@ -175,10 +233,15 @@ def main():
     last_print = time.monotonic()
     frames_rc = 0
     en_state = False
+    ramp_left = 0.0     # signed Hz currently applied to each track
+    ramp_right = 0.0
+    last_loop = time.monotonic()
 
     print(f"track-control  thr=ch{CH_THROTTLE}  steer=ch{CH_STEER}  "
           f"cruise=ch{CH_CRUISE}  "
-          f"max={MAX_FREQ}Hz  failsafe={int(FAILSAFE_TIMEOUT*1000)}ms  "
+          f"freq={MIN_FREQ}-{MAX_FREQ}Hz expo={FREQ_EXPO}  "
+          f"ramp={ACCEL_HZ_PER_S}/{DECEL_HZ_PER_S}Hz/s  "
+          f"failsafe={int(FAILSAFE_TIMEOUT*1000)}ms  "
           f"deadband=±{DEADBAND_US}µs")
 
     try:
@@ -225,6 +288,8 @@ def main():
                 buf.clear()
 
             now = time.monotonic()
+            dt = now - last_loop
+            last_loop = now
             link_alive = (now - last_rc_time) < FAILSAFE_TIMEOUT
 
             mode_us = to_us(last_chans[CH_MODE - 1])
@@ -244,15 +309,20 @@ def main():
                     throttle = min(throttle, cruise)
                 left  = max(-1.0, min(1.0, throttle + steering))
                 right = max(-1.0, min(1.0, throttle - steering))
-                moving = left != 0.0 or right != 0.0
+                ramp_left = slew_freq(ramp_left, signed_to_freq(left), dt)
+                ramp_right = slew_freq(ramp_right, signed_to_freq(right), dt)
+                # keep EN asserted while still ramping down after stick release
+                moving = (left != 0.0 or right != 0.0
+                          or ramp_left != 0.0 or ramp_right != 0.0)
                 en_state = set_enable(pi, mode_fixed or moving, en_state)
-                f_left = set_track(pi, STEP_LEFT,  DIR_LEFT,  FORWARD_LEFT,  left)
-                f_right = set_track(pi, STEP_RIGHT, DIR_RIGHT, FORWARD_RIGHT, right)
+                f_left = set_track(pi, STEP_LEFT,  DIR_LEFT,  FORWARD_LEFT,  ramp_left)
+                f_right = set_track(pi, STEP_RIGHT, DIR_RIGHT, FORWARD_RIGHT, ramp_right)
             else:
                 stop_tracks(pi)
                 en_state = set_enable(pi, False, en_state)
                 throttle = steering = cruise = 0.0
                 left = right = 0.0
+                ramp_left = ramp_right = 0.0
                 f_left = f_right = 0
 
             if now - last_print >= PRINT_INTERVAL:
