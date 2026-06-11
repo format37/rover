@@ -20,6 +20,14 @@ Group=alex
 SupplementaryGroups=dialout gpio
 WorkingDirectory=/home/alex/rover/elrs
 ExecStart=/usr/bin/python3 /home/alex/rover/elrs/track-control.py
+# SIGINT → KeyboardInterrupt → the script's finally stops PWM and deasserts EN.
+# Default SIGTERM would kill Python without cleanup, leaving the hardware PWM
+# free-running in pigpiod — a runaway rover on stop/restart mid-motion.
+KillSignal=SIGINT
+TimeoutStopSec=5
+# Backstop for SIGKILL/OOM/crashed cleanup: force both STEP PWMs off and
+# deassert active-low EN (GPIO25 high) via pigpiod no matter how we died.
+ExecStopPost=/usr/bin/pigs hp 18 0 0 hp 13 0 0 w 25 1
 Restart=on-failure
 RestartSec=3
 StandardOutput=journal

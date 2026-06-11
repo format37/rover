@@ -36,7 +36,10 @@ DIR_LEFT   = 23
 DIR_RIGHT  = 24
 
 # --- Motion parameters ---
-STEP_FREQ    = 4000   # Hz — ~150 RPM @ 1/8 microstep (well under 8kHz limit)
+STEP_FREQ    = 800    # Hz — at the pull-in limit (~800 Hz on this build): the
+                      # demo starts instantly with no accel ramp, so anything
+                      # higher hums and stalls (see track-control.py for the
+                      # ramped version that reaches 8 kHz)
 DUTY_CYCLE   = 500000 # pigpio scale: 500000 = 50%
 MOVE_SECONDS = 1.0
 

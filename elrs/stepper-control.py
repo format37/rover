@@ -61,8 +61,10 @@ FORWARD_LEFT = 1
 FORWARD_RIGHT = 0
 
 # --- Speed mapping ---
-MAX_FREQ = 4000     # Hz at full deflection (matches demo's STEP_FREQ)
-MIN_FREQ = 200      # Hz floor when commanded > 0 (avoids sub-stall regime)
+MAX_FREQ = 800      # Hz at full deflection — no slew ramp here, so capped at
+                    # the pull-in limit (see track-control.py for the ramped
+                    # 8 kHz version)
+MIN_FREQ = 200      # Hz floor when commanded > 0
 DEADBAND_US = 30    # ±µs around 1500 → motor stopped
 HALF_RANGE_US = 500 # 989..1500..2012 → ~500 µs each side
 DUTY_CYCLE = 500000 # pigpio 50% duty

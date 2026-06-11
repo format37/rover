@@ -40,6 +40,7 @@ Hardware: see elrs/docs/TB6560_ROVER_TECH_SPEC.md.
 Pre-reqs: pigpiod running, /dev/serial0 readable (see crsf-rx-test.py header).
 """
 
+import signal
 import time
 import sys
 import serial
@@ -75,8 +76,11 @@ FORWARD_RIGHT = 0
 # MAX_FREQ is the 1/8-microstep hardware budget (TB6560 opto limit 15 kHz,
 # ≈300 RPM at 8 kHz). It is reachable from standstill only because of the
 # accel ramp below — without it anything past ~800 Hz stalls (pull-in limit).
-# If the top end stalls under load, lower MAX_FREQ to the highest frequency
-# the motors hold at full stick.
+# Calibrate MAX_FREQ under load at MINIMUM pack voltage (~12.0 V, near-empty
+# 4S): pull-out speed scales with bus voltage, so a value that holds at
+# 16.8 V will stall as the pack sags. Stall symptom: one track buzzes at
+# zero torque while the other drives (hard veer); to re-sync, drop the stick
+# below ~30% so the commanded frequency falls under the ~800 Hz pull-in rate.
 MAX_FREQ = 8000     # Hz at full deflection
 MIN_FREQ = 10       # Hz at the deadband edge — slowest commandable crawl
 FREQ_EXPO = 2.0     # stick→Hz curve: 1.0 = linear, >1 = finer low-speed control
@@ -90,6 +94,9 @@ MODE_THRESHOLD_US = 1500    # CH_MODE > threshold → drivers always enabled (FI
 
 # --- Safety ---
 FAILSAFE_TIMEOUT = 0.5
+FAILSAFE_EN_HOLD = 1.0  # s — keep drivers energized after a failsafe stop so
+                        # the pole-slip ringdown happens against the 50% stop
+                        # current and the rover doesn't break loose on a grade
 PRINT_INTERVAL = 0.2
 BUF_HARD_LIMIT = 4096
 
@@ -212,6 +219,9 @@ def set_enable(pi, state, current):
 
 
 def main():
+    # systemd sends SIGINT (KillSignal= in the unit), but make a bare SIGTERM
+    # (manual kill) also run the finally-cleanup instead of dying mid-pulse.
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
     pi = pigpio.pi()
     if not pi.connected:
         sys.exit("pigpiod not running — sudo systemctl start pigpiod")
@@ -319,7 +329,12 @@ def main():
                 f_right = set_track(pi, STEP_RIGHT, DIR_RIGHT, FORWARD_RIGHT, ramp_right)
             else:
                 stop_tracks(pi)
-                en_state = set_enable(pi, False, en_state)
+                # Hold EN briefly after losing the link (never at cold start,
+                # when last_rc_time is still 0): phases stay energized while
+                # the rotor rings down, then release for fail-dead behavior.
+                hold = (last_rc_time > 0.0 and
+                        (now - last_rc_time) < FAILSAFE_TIMEOUT + FAILSAFE_EN_HOLD)
+                en_state = set_enable(pi, hold, en_state)
                 throttle = steering = cruise = 0.0
                 left = right = 0.0
                 ramp_left = ramp_right = 0.0
@@ -345,9 +360,20 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        stop_tracks(pi)
-        pi.write(STEPPER_EN, 1 - EN_ACTIVE)
-        ser.close()
+        # Each step independently: a broken pigpiod socket in stop_tracks
+        # must not skip the EN deassert (PWM would keep free-running).
+        try:
+            stop_tracks(pi)
+        except Exception:
+            pass
+        try:
+            pi.write(STEPPER_EN, 1 - EN_ACTIVE)
+        except Exception:
+            pass
+        try:
+            ser.close()
+        except Exception:
+            pass
         pi.stop()
 
 

@@ -45,9 +45,12 @@ script. If one side is inverted vs the other, flip `DIR_INVERTED`.
   Start with `sudo systemctl start pigpiod` or `sudo pigpiod`.
 - **`Unit pigpiod.service not found`** — package not installed.
   Run `sudo apt install pigpio`.
-- **Motors hum but don't turn** — STEP frequency too high for the microstep
-  setting, or TB6560 current DIP switches too low. Reduce `STEP_FREQ` or raise
-  the driver current.
+- **Motors hum but don't turn** — most likely the STEP frequency jumped from
+  standstill past the stepper pull-in rate (~800 Hz on this build). The demo
+  and `stepper-control.py` have **no accel ramp** — keep their frequencies at
+  or below 800 Hz (only the ramped `track-control.py` can go higher; see
+  *Speed mapping*). Otherwise: microstep DIP set too coarse for the
+  frequency, or TB6560 current DIP switches too low.
 
 # ELRS connection
 ## RPi Zero W — Initial Setup
@@ -165,11 +168,17 @@ slew-rate limiter ramps the *applied* frequency toward that target
   ramp is what makes 8 kHz reachable at all: a stepper stalls if asked to
   jump from standstill past its pull-in rate (~800 Hz on this build, the
   old hard cap). Direction reversals decelerate through zero first.
-  Failsafe still cuts the step pulses instantly — no ramp-down.
+  Failsafe still cuts the step pulses instantly — no ramp-down — but holds
+  the drivers enabled for `FAILSAFE_EN_HOLD` (1 s) so the stop happens
+  against the 50% stop current instead of freewheeling on a grade.
 
-Tuning on hardware: if the top end stalls under load, lower `MAX_FREQ` to
-the highest frequency the motors hold at full stick; if the ramp feels
-sluggish, raise `ACCEL_HZ_PER_S` (too high re-introduces start-up stalls).
+Tuning on hardware: calibrate `MAX_FREQ` under load **at minimum pack
+voltage** (~12.0 V, near-empty 4S) — pull-out speed scales with bus
+voltage, so a value that holds at 16.8 V will stall as the pack sags.
+Stall symptom: one track buzzes at zero torque while the other drives
+(hard veer); to re-sync, drop the stick below ~30% so the commanded
+frequency falls back under the pull-in rate. If the ramp feels sluggish,
+raise `ACCEL_HZ_PER_S` (too high re-introduces start-up stalls).
 
 ## Service
 

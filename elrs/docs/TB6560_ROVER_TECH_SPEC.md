@@ -141,6 +141,14 @@ level-shifted GPIO if you want motor standby.
 At 1/16 microstepping, 300 RPM requires 16kHz — right at the limit.
 **Recommendation: use 1/8 microstepping** → 8kHz max, well within all limits.
 
+**Pull-in rate:** opto bandwidth is not the only limit — from standstill
+these motors stall above **~800 Hz** (measured; see commit e821a8f).
+Frequencies above pull-in are reachable only by slew-ramping the step
+frequency: `track-control.py` ramps at `ACCEL_HZ_PER_S` = 4000 Hz/s up /
+`DECEL_HZ_PER_S` = 16000 Hz/s down, with direction reversals decelerating
+through zero. Pull-out speed also scales with bus voltage — calibrate the
+top frequency at minimum pack voltage (~12.0 V).
+
 ### pigpio DMA capability on Pi Zero W
 
 | Method           | Max reliable freq | Jitter       | Notes                    |
@@ -221,8 +229,8 @@ will mirror the first. Use a PWM1 pin (GPIO13 or GPIO19) for the right motor.
 
 1. **crsf_parser.py** — reads UART, parses CRSF frames, extracts channel values (988–2012μs → normalized -1.0 to +1.0)
 2. **mixer.py** — differential drive mixing: converts (throttle, steering) → (left_speed, right_speed, left_dir, right_dir)
-3. **motor_driver.py** — translates speed 0.0–1.0 → step frequency 0–8000Hz via pigpio hardware PWM; sets DIR pins
-4. **failsafe.py** — monitors CRSF link quality; if no valid frame for >500ms, ramp motors to zero
+3. **motor_driver.py** — translates speed 0.0–1.0 → expo curve + slew-limited step frequency 0–8000Hz via pigpio hardware PWM; sets DIR pins
+4. **failsafe.py** — monitors CRSF link quality; if no valid frame for >500ms, cut step pulses immediately (instant stop — no ramp-down; the slew ramp applies only to stick commands)
 5. **main.py** — event loop tying it all together
 
 ### Differential mixer logic
@@ -251,6 +259,10 @@ def mix(throttle: float, steering: float) -> tuple:
 ```
 
 ### pigpio motor control
+
+> **Illustrative only** — do NOT command `freq` directly like this above the
+> pull-in rate (~800 Hz): an instant jump from standstill stalls the motor.
+> Slew-limit toward the target as in `slew_freq()` in `track-control.py`.
 
 ```python
 import pigpio
@@ -324,6 +336,11 @@ version-controlled in `elrs/`), not manually:
 
 - `After=`/`Wants=pigpiod.service` — starts only after the pigpio daemon is up
 - `Restart=on-failure`, `RestartSec=3` — auto-recovers from a crash
+- `KillSignal=SIGINT`, `TimeoutStopSec=5` — stop runs the script's cleanup
+  (PWM off, EN deasserted); default SIGTERM would skip it and leave the
+  hardware PWM free-running in pigpiod
+- `ExecStopPost=pigs hp 18 0 0 hp 13 0 0 w 25 1` — backstop that forces both
+  STEP PWMs off and deasserts EN even after SIGKILL/OOM
 - `WantedBy=multi-user.target` — starts at boot
 - Runs as user `alex`, groups `dialout` (serial) + `gpio`
 - stdout/stderr → journal (`journalctl -u track-control.service`)
@@ -343,3 +360,5 @@ Note the unit hardcodes `/home/alex/rover/elrs` as the deployed path.
 | Stepper overheating         | Motor damage | Set current DIP to rated value, add heatsinks |
 | Single-core CPU overload    | Missed CRSF frames | pigpio DMA decouples step gen from CPU |
 | 6N137 freq limit at 15kHz  | Max speed cap | Use 1/8 microstepping (8kHz max) |
+| Step freq commanded past pull-in (~800 Hz) from standstill | Motor stalls, rover stops/veers | Software slew-rate limiter (4000 Hz/s up) + RAMP_DT_MAX dt clamp |
+| Service stop/kill mid-motion leaves HW PWM free-running | Runaway rover | `KillSignal=SIGINT` → finally-cleanup; `ExecStopPost` pigs backstop |
